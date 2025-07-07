@@ -1,5 +1,5 @@
 # ========================================
-# Hotel Performance Dashboard - Production Requirements
+# Hotel Performance Dashboard - Fixed for Python 3.11
 # ========================================
 
 # Core Flask Framework
@@ -13,70 +13,45 @@ click==8.1.7
 # Production WSGI Server
 gunicorn==21.2.0
 
-# Database & Supabase
-supabase==2.3.4
-postgrest==0.13.2
-gotrue==2.4.2
-storage3==0.7.4
+# Database & Supabase (Updated versions)
+supabase==2.7.4
+postgrest==0.16.8
+gotrue==2.7.0
+storage3==0.7.7
 
-# Data Processing & Analytics
-pandas==2.1.3
-numpy==1.25.2
-scipy==1.11.4
+# Data Processing & Analytics (Compatible versions)
+pandas==2.2.2
+numpy==1.26.4
+scipy==1.13.1
 
-# Time Series Forecasting
-prophet==1.1.5
-cmdstanpy==1.2.0
-holidays==0.38
+# Time Series Forecasting (Simplified - Prophet can be problematic)
+# prophet==1.1.5
+# cmdstanpy==1.2.0
+# holidays==0.45
+
+# Alternative: Use statsmodels for simpler forecasting
+statsmodels==0.14.2
 
 # HTTP Requests & API Integration
 requests==2.31.0
-urllib3==2.1.0
+urllib3==2.2.2
 
 # Date/Time & Environment
-python-dateutil==2.8.2
-python-dotenv==1.0.0
+python-dateutil==2.9.0
+python-dotenv==1.0.1
 
 # Security & Validation
-cryptography==41.0.8
+cryptography==42.0.8
 PyJWT==2.8.0
 
 # CORS Support
-Flask-CORS==4.0.0
+Flask-CORS==4.0.1
 
-# Performance & Caching
-redis==5.0.1
-Flask-Caching==2.1.0
+# Performance & Caching (Simplified)
+Flask-Caching==2.3.0
 
 # Rate Limiting
-Flask-Limiter==3.5.0
+Flask-Limiter==3.8.0
 
-# Testing Framework
-pytest==7.4.3
-pytest-flask==1.3.0
-pytest-cov==4.1.0
-
-# Code Quality & Formatting
-black==23.11.0
-flake8==6.1.0
-isort==5.12.0
-
-# Data Visualization (Development)
-matplotlib==3.8.2
-plotly==5.17.0
-
-# Development Tools
-watchdog==3.0.0
-
-# Optional: Database Migrations
-Flask-Migrate==4.0.5
-alembic==1.13.1
-
-# Optional: Email Testing
-Flask-Mail==0.9.1
-
-# Optional: Excel Support
-openpyxl==3.1.2
-
-# Optional: PDF Generation
-reportlab==4.0.7
+# Essential utilities
+pytz==2024.1
