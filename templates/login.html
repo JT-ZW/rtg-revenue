@@ -1,0 +1,594 @@
+{% extends "base.html" %} {% block title %}Login - Hotel Performance Dashboard{%
+endblock %} {% block extra_css %}
+<style>
+  body {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+  }
+
+  .login-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .login-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    max-width: 900px;
+    width: 100%;
+  }
+
+  .login-left {
+    background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 60px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    position: relative;
+  }
+
+  .login-left::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="hotel-pattern" patternUnits="userSpaceOnUse" width="20" height="20"><rect width="20" height="20" fill="none"/><path d="M10 2L18 10L10 18L2 10Z" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23hotel-pattern)"/></svg>');
+    opacity: 0.1;
+  }
+
+  .login-right {
+    padding: 60px 40px;
+    background: white;
+  }
+
+  .brand-logo {
+    font-size: 3.5rem;
+    margin-bottom: 1rem;
+    opacity: 0.9;
+  }
+
+  .brand-title {
+    font-size: 2rem;
+    font-weight: 300;
+    margin-bottom: 1rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .brand-subtitle {
+    font-size: 1.1rem;
+    opacity: 0.9;
+    margin-bottom: 2rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .feature-list {
+    list-style: none;
+    padding: 0;
+    margin: 2rem 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  .feature-list li {
+    padding: 0.5rem 0;
+    display: flex;
+    align-items: center;
+    opacity: 0.9;
+  }
+
+  .feature-list i {
+    margin-right: 0.75rem;
+    width: 20px;
+    text-align: center;
+  }
+
+  .login-form-title {
+    text-align: center;
+    margin-bottom: 2rem;
+    color: #333;
+  }
+
+  .form-floating {
+    margin-bottom: 1rem;
+  }
+
+  .form-control {
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    padding: 1rem;
+    transition: all 0.3s ease;
+  }
+
+  .form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+  }
+
+  .btn-login {
+    background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 10px;
+    padding: 1rem 2rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+    width: 100%;
+    margin-top: 1rem;
+  }
+
+  .btn-login:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+  }
+
+  .btn-login:active {
+    transform: translateY(0);
+  }
+
+  .login-footer {
+    text-align: center;
+    margin-top: 2rem;
+    color: #6c757d;
+  }
+
+  .password-toggle {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    z-index: 5;
+  }
+
+  .password-toggle:hover {
+    color: #667eea;
+  }
+
+  /* Hide navbar and footer on login page */
+  .navbar,
+  .footer {
+    display: none !important;
+  }
+
+  .main-content {
+    padding: 0 !important;
+  }
+
+  /* Mobile responsiveness */
+  @media (max-width: 768px) {
+    .login-card {
+      margin: 10px;
+    }
+
+    .login-left {
+      padding: 40px 20px;
+    }
+
+    .login-right {
+      padding: 40px 20px;
+    }
+
+    .brand-title {
+      font-size: 1.5rem;
+    }
+
+    .brand-subtitle {
+      font-size: 1rem;
+    }
+
+    .feature-list {
+      margin: 1rem 0;
+    }
+  }
+
+  /* Loading state */
+  .btn-login.loading {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .btn-login.loading .spinner-border {
+    width: 1rem;
+    height: 1rem;
+    margin-right: 0.5rem;
+  }
+</style>
+{% endblock %} {% block content %}
+<div class="login-container">
+  <div class="login-card">
+    <div class="row g-0 h-100">
+      <!-- Left Side - Branding -->
+      <div class="col-lg-6 d-none d-lg-block">
+        <div class="login-left h-100">
+          <div class="brand-logo">
+            <i class="fas fa-hotel"></i>
+          </div>
+          <h2 class="brand-title">
+            Rainbow Tourism Hotel Performance Dashboard
+          </h2>
+          <p class="brand-subtitle">
+            Track, analyze, and optimize your hotel's performance with
+            intelligent insights
+          </p>
+
+          <ul class="feature-list">
+            <li>
+              <i class="fas fa-chart-line"></i>
+              Real-time performance tracking
+            </li>
+            <li>
+              <i class="fas fa-brain"></i>
+              AI-powered insights & recommendations
+            </li>
+            <li>
+              <i class="fas fa-crystal-ball"></i>
+              Advanced forecasting capabilities
+            </li>
+            <li>
+              <i class="fas fa-file-export"></i>
+              Comprehensive reporting & exports
+            </li>
+            <li>
+              <i class="fas fa-shield-alt"></i>
+              Secure data management
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Right Side - Login Form -->
+      <div class="col-lg-6">
+        <div
+          class="login-right h-100 d-flex flex-column justify-content-center"
+        >
+          <!-- Mobile Brand Display -->
+          <div class="d-lg-none text-center mb-4">
+            <div class="text-primary mb-2">
+              <i class="fas fa-hotel fa-3x"></i>
+            </div>
+            <h3 class="text-primary">Hotel Dashboard</h3>
+            <p class="text-muted">Sign in to your account</p>
+          </div>
+
+          <!-- Desktop Login Title -->
+          <div class="d-none d-lg-block">
+            <h3 class="login-form-title">Welcome Back</h3>
+            <p class="text-center text-muted mb-4">
+              Please sign in to your account
+            </p>
+          </div>
+
+          <!-- Login Form -->
+          <form method="POST" id="loginForm" novalidate>
+            <div class="form-floating mb-3">
+              <input
+                type="email"
+                class="form-control"
+                id="email"
+                name="email"
+                placeholder="name@example.com"
+                required
+                autocomplete="email"
+                autofocus
+              />
+              <label for="email">
+                <i class="fas fa-envelope me-2"></i>Email Address
+              </label>
+              <div class="invalid-feedback">
+                Please enter a valid email address.
+              </div>
+            </div>
+
+            <div class="form-floating mb-3 position-relative">
+              <input
+                type="password"
+                class="form-control"
+                id="password"
+                name="password"
+                placeholder="Password"
+                required
+                autocomplete="current-password"
+              />
+              <label for="password">
+                <i class="fas fa-lock me-2"></i>Password
+              </label>
+              <button type="button" class="password-toggle" id="togglePassword">
+                <i class="fas fa-eye"></i>
+              </button>
+              <div class="invalid-feedback">Please enter your password.</div>
+            </div>
+
+            <div class="row mb-3">
+              <div class="col-6">
+                <div class="form-check">
+                  <input
+                    type="checkbox"
+                    class="form-check-input"
+                    id="rememberMe"
+                    name="remember"
+                  />
+                  <label class="form-check-label" for="rememberMe">
+                    Remember me
+                  </label>
+                </div>
+              </div>
+              <div class="col-6 text-end">
+                <a
+                  href="#"
+                  class="text-decoration-none small text-muted"
+                  data-bs-toggle="modal"
+                  data-bs-target="#forgotPasswordModal"
+                >
+                  Forgot password?
+                </a>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              class="btn btn-primary btn-login"
+              id="loginBtn"
+            >
+              <span class="btn-text">Sign In</span>
+            </button>
+          </form>
+
+          <!-- Login Footer -->
+          <div class="login-footer">
+            <small>
+              Don't have an account?
+              <a
+                href="#"
+                class="text-decoration-none"
+                data-bs-toggle="modal"
+                data-bs-target="#signupModal"
+              >
+                Contact your administrator
+              </a>
+            </small>
+            <hr class="my-3" />
+            <small class="text-muted">
+              &copy; <span id="currentYear">2025</span> Rainbow Tourism Group
+              Hotel Performance Dashboard. All rights reserved.
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Forgot Password Modal -->
+<div
+  class="modal fade"
+  id="forgotPasswordModal"
+  tabindex="-1"
+  aria-labelledby="forgotPasswordModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="forgotPasswordModalLabel">
+          <i class="fas fa-key me-2"></i>Reset Password
+        </h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted mb-3">
+          Enter your email address and we'll send you a link to reset your
+          password.
+        </p>
+        <form id="forgotPasswordForm">
+          <div class="form-floating mb-3">
+            <input
+              type="email"
+              class="form-control"
+              id="resetEmail"
+              placeholder="name@example.com"
+              required
+            />
+            <label for="resetEmail">Email Address</label>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary" id="sendResetBtn">
+          <i class="fas fa-paper-plane me-1"></i>Send Reset Link
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Signup Info Modal -->
+<div
+  class="modal fade"
+  id="signupModal"
+  tabindex="-1"
+  aria-labelledby="signupModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="signupModalLabel">
+          <i class="fas fa-user-plus me-2"></i>Account Access
+        </h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <div class="text-center mb-3">
+          <i class="fas fa-users fa-3x text-primary mb-3"></i>
+          <h6>Account Registration</h6>
+        </div>
+        <p class="text-muted">
+          New user accounts are created by system administrators. Please contact
+          your IT department or system administrator to request access to the
+          Hotel Performance Dashboard.
+        </p>
+        <div class="alert alert-info">
+          <i class="fas fa-info-circle me-2"></i>
+          <strong>Need access?</strong> Reach out to your manager or IT support
+          team with your business email address.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+          <i class="fas fa-check me-1"></i>Understood
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+      initializeLoginPage();
+
+      // Set current year
+      const currentYearElement = document.getElementById('currentYear');
+      if (currentYearElement) {
+          currentYearElement.textContent = new Date().getFullYear();
+      }
+  });
+
+  function initializeLoginPage() {
+      const loginForm = document.getElementById('loginForm');
+      const loginBtn = document.getElementById('loginBtn');
+      const togglePassword = document.getElementById('togglePassword');
+      const passwordInput = document.getElementById('password');
+
+      // Password toggle functionality
+      togglePassword.addEventListener('click', function() {
+          const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+          passwordInput.setAttribute('type', type);
+
+          const icon = this.querySelector('i');
+          icon.classList.toggle('fa-eye');
+          icon.classList.toggle('fa-eye-slash');
+      });
+
+      // Form validation
+      loginForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+
+          if (!this.checkValidity()) {
+              e.stopPropagation();
+              this.classList.add('was-validated');
+              return;
+          }
+
+          // Show loading state
+          showLoadingState();
+
+          // Submit form after validation
+          setTimeout(() => {
+              this.submit();
+          }, 500);
+      });
+
+      // Email validation
+      const emailInput = document.getElementById('email');
+      emailInput.addEventListener('input', function() {
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (this.value && !emailRegex.test(this.value)) {
+              this.setCustomValidity('Please enter a valid email address');
+          } else {
+              this.setCustomValidity('');
+          }
+      });
+
+      // Password strength indicator (optional)
+      passwordInput.addEventListener('input', function() {
+          if (this.value.length < 6) {
+              this.setCustomValidity('Password must be at least 6 characters long');
+          } else {
+              this.setCustomValidity('');
+          }
+      });
+
+      // Forgot password functionality
+      const sendResetBtn = document.getElementById('sendResetBtn');
+      const forgotPasswordForm = document.getElementById('forgotPasswordForm');
+
+      sendResetBtn.addEventListener('click', function() {
+          const resetEmail = document.getElementById('resetEmail');
+
+          if (!resetEmail.value || !resetEmail.checkValidity()) {
+              resetEmail.classList.add('is-invalid');
+              return;
+          }
+
+          // Simulate sending reset email
+          this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sending...';
+          this.disabled = true;
+
+          setTimeout(() => {
+              alert('If an account with that email exists, you will receive a password reset link shortly.');
+              bootstrap.Modal.getInstance(document.getElementById('forgotPasswordModal')).hide();
+              this.innerHTML = '<i class="fas fa-paper-plane me-1"></i>Send Reset Link';
+              this.disabled = false;
+              resetEmail.value = '';
+              resetEmail.classList.remove('is-invalid');
+          }, 2000);
+      });
+
+      // Auto-focus email field
+      document.getElementById('email').focus();
+  }
+
+  function showLoadingState() {
+      const loginBtn = document.getElementById('loginBtn');
+      loginBtn.classList.add('loading');
+      loginBtn.disabled = true;
+      loginBtn.innerHTML = `
+          <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+          Signing In...
+      `;
+  }
+
+  // Reset form state if there's an error
+  function resetFormState() {
+      const loginBtn = document.getElementById('loginBtn');
+      loginBtn.classList.remove('loading');
+      loginBtn.disabled = false;
+      loginBtn.innerHTML = '<span class="btn-text">Sign In</span>';
+  }
+
+  // Reset form if there were flash messages (indicating error)
+  {% if get_flashed_messages() %}
+      setTimeout(resetFormState, 100);
+  {% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+
+    <title>{% block title %}Hotel Performance Dashboard{% endblock %}</title>
+
+    <!-- Favicon -->
+    <link
+      rel="icon"
+      type="image/x-icon"
+      href="{{ url_for('static', filename='favicon.ico') }}"
+    />
+
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+
+    <!-- Font Awesome Icons -->
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+      rel="stylesheet"
+    />
+
+    <!-- Custom CSS -->
+    <link
+      href="{{ url_for('static', filename='css/style.css') }}"
+      rel="stylesheet"
+    />
+
+    <!-- Page-specific CSS -->
+    {% block extra_css %}{% endblock %}
+
+    <!-- Page-specific head content (for Chart.js in reports.html) -->
+    {% block extra_head %}{% endblock %}
+  </head>
+
+  <body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+      <div class="container-fluid">
+        <!-- Brand -->
+        <a class="navbar-brand" href="{{ url_for('index') }}">
+          <i class="fas fa-hotel me-2"></i>
+          Hotel Dashboard
+        </a>
+
+        <!-- Mobile Toggle Button -->
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+          aria-controls="navbarNav"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <!-- Navigation Links -->
+        <div class="collapse navbar-collapse" id="navbarNav">
+          {% if session.user_id %}
+          <!-- Main Navigation -->
+          <ul class="navbar-nav me-auto">
+            <li class="nav-item">
+              <a
+                class="nav-link {% if request.endpoint == 'index' %}active{% endif %}"
+                href="{{ url_for('index') }}"
+              >
+                <i class="fas fa-tachometer-alt me-1"></i>
+                Dashboard
+              </a>
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link {% if request.endpoint == 'reports' %}active{% endif %}"
+                href="{{ url_for('reports') }}"
+              >
+                <i class="fas fa-chart-line me-1"></i>
+                Reports
+              </a>
+            </li>
+          </ul>
+
+          <!-- User Menu -->
+          <ul class="navbar-nav">
+            <li class="nav-item dropdown">
+              <a
+                class="nav-link dropdown-toggle"
+                href="#"
+                id="userDropdown"
+                role="button"
+                data-bs-toggle="dropdown"
+                aria-expanded="false"
+              >
+                <i class="fas fa-user-circle me-1"></i>
+                {% if session.user_name %}{{ session.user_name }}{% else
+                %}User{% endif %}
+              </a>
+              <ul
+                class="dropdown-menu dropdown-menu-end"
+                aria-labelledby="userDropdown"
+              >
+                <li>
+                  <span class="dropdown-item-text">
+                    <small class="text-muted">{{ session.user_email }}</small>
+                  </span>
+                </li>
+                <li><hr class="dropdown-divider" /></li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('logout') }}">
+                    <i class="fas fa-sign-out-alt me-1"></i>
+                    Logout
+                  </a>
+                </li>
+              </ul>
+            </li>
+          </ul>
+          {% endif %}
+        </div>
+      </div>
+    </nav>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %} {% if
+    messages %}
+    <div class="container-fluid mt-3">
+      {% for category, message in messages %}
+      <div
+        class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show"
+        role="alert"
+      >
+        {% if category == 'success' %}
+        <i class="fas fa-check-circle me-2"></i>
+        {% elif category == 'error' or category == 'danger' %}
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        {% elif category == 'warning' %}
+        <i class="fas fa-exclamation-circle me-2"></i>
+        {% elif category == 'info' %}
+        <i class="fas fa-info-circle me-2"></i>
+        {% endif %} {{ message }}
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="alert"
+          aria-label="Close"
+        ></button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %} {% endwith %}
+
+    <!-- Loading Spinner (Hidden by default) -->
+    <div id="loadingSpinner" class="d-none">
+      <div class="spinner-overlay">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <div class="mt-2">Processing...</div>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      {% block content %}
+      <!-- Page-specific content goes here -->
+      {% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer bg-light mt-auto py-3">
+      <div class="container-fluid">
+        <div class="row align-items-center">
+          <div class="col-md-6">
+            <span class="text-muted">
+              <i class="fas fa-hotel me-1"></i>
+              Hotel Performance Dashboard &copy;
+              <span id="currentYear">2025</span>
+            </span>
+          </div>
+          <div class="col-md-6 text-md-end">
+            <span class="text-muted">
+              <small>Last updated: <span id="lastUpdated"></span></small>
+            </span>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <!-- JavaScript Libraries -->
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+
+    <!-- jsPDF for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <!-- Custom JavaScript -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    <!-- Page-specific JavaScript -->
+    {% block extra_js %}{% endblock %}
+
+    <!-- Global JavaScript Configuration -->
+    <script>
+      // Set timestamps and initialize global variables
+      document.addEventListener('DOMContentLoaded', function() {
+        // Set last updated timestamp
+        const lastUpdatedElement = document.getElementById('lastUpdated');
+        if (lastUpdatedElement) {
+          lastUpdatedElement.textContent = new Date().toLocaleString();
+        }
+
+        // Set current year
+        const currentYearElement = document.getElementById('currentYear');
+        if (currentYearElement) {
+          currentYearElement.textContent = new Date().getFullYear();
+        }
+
+        // Initialize loading spinner functionality
+        window.showGlobalLoading = function() {
+          const spinner = document.getElementById('loadingSpinner');
+          if (spinner) spinner.classList.remove('d-none');
+        };
+
+        window.hideGlobalLoading = function() {
+          const spinner = document.getElementById('loadingSpinner');
+          if (spinner) spinner.classList.add('d-none');
+        };
+      });
+
+      // Global CSRF token for AJAX requests
+      {% if session.get('_csrf_token') %}
+      window.csrfToken = '{{ session._csrf_token }}';
+      {% endif %}
+
+      // Global user information
+      window.userInfo = {
+        userId: '{{ session.get("user_id", "") }}',
+        userName: '{{ session.get("user_name", "") }}',
+        userEmail: '{{ session.get("user_email", "") }}'
+      };
+
+      // Global API endpoints configuration
+      window.apiEndpoints = {
+        submit: '{{ url_for("submit_data") }}',
+        update: '{{ url_for("update_data") }}',
+        forecast: '{{ url_for("get_forecast") }}',
+        analyze: '{{ url_for("get_ai_analysis") }}',
+        data: '{{ url_for("get_data_api") }}',
+        health: '{{ url_for("health_check") }}',
+        reports: '{{ url_for("reports") }}'
+      };
+
+      // Global error handler for AJAX requests
+      window.handleAjaxError = function(xhr, status, error) {
+        console.error('AJAX Error:', { xhr, status, error });
+
+        let message = 'An error occurred. Please try again.';
+
+        if (xhr.responseJSON && xhr.responseJSON.error) {
+          message = xhr.responseJSON.error;
+        } else if (xhr.status === 0) {
+          message = 'Connection lost. Please check your internet connection.';
+        } else if (xhr.status >= 500) {
+          message = 'Server error. Please try again later.';
+        } else if (xhr.status === 401) {
+          message = 'Session expired. Please log in again.';
+          setTimeout(() => {
+            window.location.href = '{{ url_for("login") }}';
+          }, 2000);
+        }
+
+        // Show error message
+        showNotification(message, 'error');
+        hideGlobalLoading();
+      };
+
+      // Global notification system
+      window.showNotification = function(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show`;
+        notification.style.position = 'fixed';
+        notification.style.top = '20px';
+        notification.style.right = '20px';
+        notification.style.zIndex = '9999';
+        notification.style.minWidth = '300px';
+
+        notification.innerHTML = `
+          <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
+          ${message}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+
+        document.body.appendChild(notification);
+
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+          if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+          }
+        }, 5000);
+      };
+
+      // Global utility functions
+      window.formatCurrency = function(amount, decimals = 2) {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals
+        }).format(amount);
+      };
+
+      window.formatDate = function(date, format = 'short') {
+        if (!date) return 'N/A';
+
+        const dateObj = typeof date === 'string' ? new Date(date) : date;
+
+        if (format === 'short') {
+          return dateObj.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          });
+        } else if (format === 'long') {
+          return dateObj.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+        }
+
+        return dateObj.toLocaleDateString();
+      };
+
+      // Global form validation helper
+      window.validateForm = function(formElement) {
+        const requiredFields = formElement.querySelectorAll('[required]');
+        let isValid = true;
+
+        requiredFields.forEach(field => {
+          if (!field.value.trim()) {
+            field.classList.add('is-invalid');
+            isValid = false;
+          } else {
+            field.classList.remove('is-invalid');
+          }
+        });
+
+        return isValid;
+      };
+
+      // Debug helper
+      window.debugInfo = function() {
+        console.log('=== GLOBAL DEBUG INFO ===');
+        console.log('User Info:', window.userInfo);
+        console.log('API Endpoints:', window.apiEndpoints);
+        console.log('CSRF Token:', window.csrfToken ? 'Present' : 'Missing');
+        console.log('Chart.js Available:', typeof Chart !== 'undefined');
+        console.log('Bootstrap Available:', typeof bootstrap !== 'undefined');
+      };
+    </script>
+  </body>
+</html>

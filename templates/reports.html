@@ -1,0 +1,2681 @@
+{% extends "base.html" %} {% block title %}Reports - Hotel Performance
+Dashboard{% endblock %} {% block extra_head %}
+<!-- Chart.js CDN - CRITICAL: Load this first -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+{% endblock %} {% block extra_css %}
+<style>
+  .reports-header {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 15px;
+    padding: 30px;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  }
+
+  .stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border-left: 4px solid #007bff;
+    height: 100%;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  }
+
+  .stat-card.positive {
+    border-left-color: #28a745;
+  }
+
+  .stat-card.negative {
+    border-left-color: #dc3545;
+  }
+
+  .stat-card.warning {
+    border-left-color: #ffc107;
+  }
+
+  .stat-card.neutral {
+    border-left-color: #6c757d;
+  }
+
+  .stat-value {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 5px;
+  }
+
+  .stat-label {
+    color: #6c757d;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+  }
+
+  .stat-change {
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  /* New Analytics Styles */
+  .metric-item {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    height: 100%;
+  }
+
+  .metric-label {
+    color: #6c757d;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+
+  .metric-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #495057;
+  }
+
+  .chart-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+
+  .chart-header {
+    background: #f8f9fa;
+    padding: 20px 25px;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .chart-body {
+    padding: 25px;
+  }
+
+  .chart-container {
+    position: relative;
+    height: 400px;
+    margin: 20px 0;
+  }
+
+  .filter-panel {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 25px;
+  }
+
+  .date-range-picker {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+  }
+
+  .export-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .table-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+
+  .table-header {
+    background: #f8f9fa;
+    padding: 20px 25px;
+    border-bottom: 1px solid #dee2e6;
+  }
+
+  .performance-table {
+    margin: 0;
+  }
+
+  .performance-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    border-top: none;
+    padding: 15px 10px;
+    font-size: 0.9rem;
+  }
+
+  .performance-table td {
+    padding: 12px 10px;
+    vertical-align: middle;
+    font-size: 0.9rem;
+  }
+
+  .variance-positive {
+    color: #28a745;
+    font-weight: 600;
+  }
+
+  .variance-negative {
+    color: #dc3545;
+    font-weight: 600;
+  }
+
+  .badge-variance {
+    font-size: 0.75rem;
+    padding: 0.4rem 0.6rem;
+  }
+
+  .no-data-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #6c757d;
+  }
+
+  .no-data-state i {
+    font-size: 4rem;
+    margin-bottom: 20px;
+    opacity: 0.5;
+  }
+
+  .loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    color: white;
+  }
+
+  .tab-content {
+    padding: 0;
+  }
+
+  .nav-tabs .nav-link {
+    border-radius: 8px 8px 0 0;
+    font-weight: 500;
+    color: #6c757d;
+    border: 1px solid transparent;
+  }
+
+  .nav-tabs .nav-link.active {
+    background: white;
+    border-color: #dee2e6 #dee2e6 white;
+    color: #495057;
+  }
+
+  .chart-error {
+    text-align: center;
+    padding: 40px;
+    color: #6c757d;
+    min-height: 300px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .chart-error i {
+    font-size: 3rem;
+    margin-bottom: 15px;
+    opacity: 0.5;
+  }
+
+  /* Enhanced Alerts for Insights */
+  .alert {
+    border-radius: 10px;
+    border: none;
+  }
+
+  .alert-heading {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  /* Progress bars for metrics */
+  .progress {
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    border-radius: 10px;
+  }
+
+  /* Badge enhancements */
+  .badge {
+    font-size: 0.8rem;
+    padding: 0.5rem 0.8rem;
+    border-radius: 20px;
+  }
+
+  /* Trend indicators */
+  .trend-up {
+    color: #28a745;
+  }
+
+  .trend-down {
+    color: #dc3545;
+  }
+
+  .trend-stable {
+    color: #6c757d;
+  }
+
+  /* NEW: Edit functionality styles for reports */
+  .edit-mode .modal-header {
+    background-color: #fff3cd;
+    border-bottom: 1px solid #ffeaa7;
+  }
+
+  .edit-mode .modal-title {
+    color: #856404;
+  }
+
+  .btn-edit {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 0.2rem;
+  }
+
+  .btn-delete {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 0.2rem;
+  }
+
+  .data-row:hover {
+    background-color: #f8f9fa;
+  }
+
+  .data-row:hover .btn-edit,
+  .data-row:hover .btn-delete {
+    opacity: 1;
+  }
+
+  .btn-edit,
+  .btn-delete {
+    opacity: 0.7;
+    transition: opacity 0.2s;
+  }
+
+  .table-actions {
+    min-width: 100px;
+    text-align: center;
+  }
+
+  /* Delete button styling */
+  .btn-delete-confirm {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: white;
+  }
+
+  .btn-delete-confirm:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+  }
+
+  /* Modal mode indicators */
+  .modal-mode-indicator {
+    font-size: 0.875rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    margin-left: 0.5rem;
+  }
+
+  .mode-add {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+  }
+
+  .mode-edit {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+  }
+
+  /* NEW: Comments field styling */
+  .comments-section {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 15px;
+    border-left: 4px solid #17a2b8;
+  }
+
+  .data-entry-form {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 10px;
+    padding: 25px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  @media (max-width: 768px) {
+    .reports-header {
+      padding: 20px;
+      text-align: center;
+    }
+
+    .export-buttons {
+      justify-content: center;
+    }
+
+    .stat-value {
+      font-size: 1.8rem;
+    }
+
+    .chart-container {
+      height: 300px;
+    }
+
+    .metric-item {
+      margin-bottom: 15px;
+    }
+
+    .table-actions {
+      min-width: 80px;
+    }
+
+    .btn-edit,
+    .btn-delete {
+      padding: 0.2rem 0.4rem;
+      font-size: 0.7rem;
+    }
+  }
+</style>
+{% endblock %} {% block content %}
+<div class="container-fluid py-4">
+  <!-- Reports Header -->
+  <div class="reports-header">
+    <div class="row align-items-center">
+      <div class="col-lg-8">
+        <h1 class="h3 mb-2">
+          <i class="fas fa-chart-line text-primary me-2"></i>
+          Performance Reports
+        </h1>
+        <p class="text-muted mb-3">
+          Comprehensive analysis of your hotel's performance from
+          <strong
+            >{{ start_date.strftime('%B %d, %Y') if start_date else 'N/A'
+            }}</strong
+          >
+          to
+          <strong
+            >{{ end_date.strftime('%B %d, %Y') if end_date else 'N/A' }}</strong
+          >
+        </p>
+        <div class="d-flex align-items-center text-muted">
+          <i class="fas fa-database me-2"></i>
+          <span>{{ performance_data|length }} data points analyzed</span>
+        </div>
+      </div>
+      <div class="col-lg-4 text-lg-end">
+        <div class="export-buttons">
+          <button class="btn btn-outline-primary" id="exportPdfBtn">
+            <i class="fas fa-file-pdf me-1"></i>Export PDF
+          </button>
+          <button class="btn btn-outline-success" id="exportExcelBtn">
+            <i class="fas fa-file-excel me-1"></i>Export Excel
+          </button>
+          <button class="btn btn-primary" id="refreshDataBtn">
+            <i class="fas fa-sync-alt me-1"></i>Refresh
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter Panel -->
+  <div class="filter-panel">
+    <div class="row align-items-end">
+      <div class="col-lg-6">
+        <h6 class="mb-3">
+          <i class="fas fa-filter me-2"></i>Date Range Filter
+        </h6>
+        <div class="date-range-picker">
+          <form method="GET" id="dateRangeForm" class="row g-3">
+            <div class="col-md-6">
+              <label for="startDate" class="form-label">Start Date</label>
+              <input
+                type="date"
+                class="form-control"
+                id="startDate"
+                name="start_date"
+                value="{{ start_date.strftime('%Y-%m-%d') if start_date else '' }}"
+              />
+            </div>
+            <div class="col-md-6">
+              <label for="endDate" class="form-label">End Date</label>
+              <input
+                type="date"
+                class="form-control"
+                id="endDate"
+                name="end_date"
+                value="{{ end_date.strftime('%Y-%m-%d') if end_date else '' }}"
+              />
+            </div>
+          </form>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="row g-2">
+          <div class="col-6 col-md-3">
+            <button
+              class="btn btn-outline-secondary btn-sm w-100"
+              onclick="setDateRange(7)"
+            >
+              Last 7 Days
+            </button>
+          </div>
+          <div class="col-6 col-md-3">
+            <button
+              class="btn btn-outline-secondary btn-sm w-100"
+              onclick="setDateRange(30)"
+            >
+              Last 30 Days
+            </button>
+          </div>
+          <div class="col-6 col-md-3">
+            <button
+              class="btn btn-outline-secondary btn-sm w-100"
+              onclick="setDateRange(90)"
+            >
+              Last 90 Days
+            </button>
+          </div>
+          <div class="col-6 col-md-3">
+            <button
+              class="btn btn-primary btn-sm w-100"
+              onclick="applyDateFilter()"
+            >
+              Apply Filter
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enhanced Summary Statistics -->
+  {% if summary_stats %}
+  <div class="row mb-4">
+    <!-- Revenue Metrics -->
+    <div class="col-lg-3 col-md-6 mb-3">
+      <div
+        class="stat-card {% if summary_stats.get('avg_revenue_variance', 0) >= 0 %}positive{% else %}negative{% endif %}"
+      >
+        <div class="stat-label">Average Revenue Variance</div>
+        <div class="stat-value">
+          ${{ "%.0f"|format(summary_stats.get('avg_revenue_variance', 0)|float)
+          }}
+        </div>
+        <div
+          class="stat-change {% if summary_stats.get('avg_revenue_variance', 0) >= 0 %}variance-positive{% else %}variance-negative{% endif %}"
+        >
+          <i
+            class="fas fa-{% if summary_stats.get('avg_revenue_variance', 0) >= 0 %}arrow-up{% else %}arrow-down{% endif %} me-1"
+          ></i>
+          {{ "%.1f"|format(summary_stats.get('avg_revenue_variance_pct',
+          0)|float|abs) }}% from target
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-3">
+      <div
+        class="stat-card {% if summary_stats.get('avg_room_rate_variance', 0) >= 0 %}positive{% else %}negative{% endif %}"
+      >
+        <div class="stat-label">Average Room Rate Variance</div>
+        <div class="stat-value">
+          ${{ "%.2f"|format(summary_stats.get('avg_room_rate_variance',
+          0)|float) }}
+        </div>
+        <div
+          class="stat-change {% if summary_stats.get('avg_room_rate_variance', 0) >= 0 %}variance-positive{% else %}variance-negative{% endif %}"
+        >
+          <i
+            class="fas fa-{% if summary_stats.get('avg_room_rate_variance', 0) >= 0 %}arrow-up{% else %}arrow-down{% endif %} me-1"
+          ></i>
+          {{ "%.1f"|format(summary_stats.get('avg_room_rate_variance_pct',
+          0)|float|abs) }}% from target
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-3">
+      <div class="stat-card neutral">
+        <div class="stat-label">Total Revenue Generated</div>
+        <div class="stat-value">
+          ${{ "%.0f"|format(summary_stats.get('total_actual_revenue', 0)|float)
+          }}
+        </div>
+        <div class="stat-change text-muted">
+          <i class="fas fa-target me-1"></i>
+          Target: ${{ "%.0f"|format(summary_stats.get('total_target_revenue',
+          0)|float) }}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-3">
+      <div class="stat-card warning">
+        <div class="stat-label">Performance Score</div>
+        <div class="stat-value">
+          {{ "%.0f"|format(summary_stats.get('performance_score', 85)|float) }}%
+        </div>
+        <div class="stat-change text-muted">
+          <i class="fas fa-star me-1"></i>
+          {% if summary_stats.get('performance_score', 85)|float >= 90
+          %}Excellent {% elif summary_stats.get('performance_score', 85)|float
+          >= 75 %}Good {% elif summary_stats.get('performance_score', 85)|float
+          >= 60 %}Fair {% else %}Needs Improvement{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Additional KPI Row -->
+  <div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-3">
+      <div class="stat-card positive">
+        <div class="stat-label">Revenue Achievement Rate</div>
+        <div class="stat-value">
+          {{ "%.1f"|format(summary_stats.get('revenue_achievement_rate',
+          0)|float) }}%
+        </div>
+        <div class="stat-change text-muted">
+          <i class="fas fa-calendar me-1"></i>
+          {{ summary_stats.get('days_analyzed', 0)|int }} days analyzed
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-3">
+      <div class="stat-card positive">
+        <div class="stat-label">Room Rate Achievement</div>
+        <div class="stat-value">
+          {{ "%.1f"|format(summary_stats.get('room_rate_achievement_rate',
+          0)|float) }}%
+        </div>
+        <div class="stat-change text-muted">
+          <i class="fas fa-bed me-1"></i>
+          Avg: ${{ "%.2f"|format(summary_stats.get('avg_actual_room_rate',
+          0)|float) }}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-3">
+      <div
+        class="stat-card {% if summary_stats.get('days_above_revenue_target', 0) > summary_stats.get('days_below_revenue_target', 0) %}positive{% else %}negative{% endif %}"
+      >
+        <div class="stat-label">Days Above Revenue Target</div>
+        <div class="stat-value">
+          {{ summary_stats.get('days_above_revenue_target', 0)|int }}
+        </div>
+        <div class="stat-change text-muted">
+          <i class="fas fa-chart-line me-1"></i>
+          {{ summary_stats.get('days_below_revenue_target', 0)|int }} below
+          target
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-3">
+      <div
+        class="stat-card {% if summary_stats.get('days_above_rate_target', 0) > summary_stats.get('days_below_rate_target', 0) %}positive{% else %}negative{% endif %}"
+      >
+        <div class="stat-label">Days Above Rate Target</div>
+        <div class="stat-value">
+          {{ summary_stats.get('days_above_rate_target', 0)|int }}
+        </div>
+        <div class="stat-change text-muted">
+          <i class="fas fa-percentage me-1"></i>
+          {{ summary_stats.get('days_below_rate_target', 0)|int }} below target
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Advanced Analytics Section -->
+  {% if advanced_metrics %}
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="chart-card">
+        <div class="chart-header">
+          <h5 class="mb-0">
+            <i class="fas fa-analytics me-2"></i>Advanced Analytics
+          </h5>
+        </div>
+        <div class="chart-body">
+          <div class="row">
+            <div class="col-lg-3 col-md-6 mb-3">
+              <div class="metric-item">
+                <div class="metric-label">Revenue Trend</div>
+                <div class="metric-value">
+                  <span
+                    class="badge bg-{% if advanced_metrics.revenue_trend == 'increasing' %}success{% elif advanced_metrics.revenue_trend == 'decreasing' %}danger{% else %}secondary{% endif %}"
+                  >
+                    <i
+                      class="fas fa-{% if advanced_metrics.revenue_trend == 'increasing' %}arrow-up{% elif advanced_metrics.revenue_trend == 'decreasing' %}arrow-down{% else %}minus{% endif %} me-1"
+                    ></i>
+                    {{ advanced_metrics.revenue_trend|title }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+              <div class="metric-item">
+                <div class="metric-label">Rate Trend</div>
+                <div class="metric-value">
+                  <span
+                    class="badge bg-{% if advanced_metrics.rate_trend == 'increasing' %}success{% elif advanced_metrics.rate_trend == 'decreasing' %}danger{% else %}secondary{% endif %}"
+                  >
+                    <i
+                      class="fas fa-{% if advanced_metrics.rate_trend == 'increasing' %}arrow-up{% elif advanced_metrics.rate_trend == 'decreasing' %}arrow-down{% else %}minus{% endif %} me-1"
+                    ></i>
+                    {{ advanced_metrics.rate_trend|title }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+              <div class="metric-item">
+                <div class="metric-label">Revenue Volatility</div>
+                <div class="metric-value">
+                  {{ "%.2f"|format(advanced_metrics.revenue_volatility|float)
+                  }}%
+                  <span class="text-muted">σ</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+              <div class="metric-item">
+                <div class="metric-label">Consistency Score</div>
+                <div class="metric-value">
+                  {{ "%.1f"|format(advanced_metrics.consistency_score|float) }}%
+                  <div class="progress mt-1" style="height: 4px">
+                    <div
+                      class="progress-bar bg-{% if advanced_metrics.consistency_score|float >= 75 %}success{% elif advanced_metrics.consistency_score|float >= 50 %}warning{% else %}danger{% endif %}"
+                      style="width: {{ advanced_metrics.consistency_score|float }}%"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row mt-3">
+            <div class="col-lg-6">
+              <div class="metric-item">
+                <div class="metric-label">Best Revenue Day</div>
+                <div class="metric-value">
+                  <strong
+                    >${{
+                    "%.0f"|format(advanced_metrics.best_revenue_day.amount|float)
+                    }}</strong
+                  >
+                  <small class="text-muted d-block"
+                    >{{ advanced_metrics.best_revenue_day.date }}</small
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div class="col-lg-6">
+              <div class="metric-item">
+                <div class="metric-label">Worst Revenue Day</div>
+                <div class="metric-value">
+                  <strong
+                    >${{
+                    "%.0f"|format(advanced_metrics.worst_revenue_day.amount|float)
+                    }}</strong
+                  >
+                  <small class="text-muted d-block"
+                    >{{ advanced_metrics.worst_revenue_day.date }}</small
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row mt-3">
+            <div class="col-lg-4">
+              <div class="metric-item">
+                <div class="metric-label">Revenue Range</div>
+                <div class="metric-value">
+                  ${{ "%.0f"|format(advanced_metrics.min_revenue|float) }} - ${{
+                  "%.0f"|format(advanced_metrics.max_revenue|float) }}
+                  <small class="text-muted d-block"
+                    >Avg: ${{ "%.0f"|format(advanced_metrics.avg_revenue|float)
+                    }}</small
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div class="col-lg-4">
+              <div class="metric-item">
+                <div class="metric-label">Room Rate Range</div>
+                <div class="metric-value">
+                  ${{ "%.2f"|format(advanced_metrics.min_room_rate|float) }} -
+                  ${{ "%.2f"|format(advanced_metrics.max_room_rate|float) }}
+                  <small class="text-muted d-block"
+                    >Avg: ${{
+                    "%.2f"|format(advanced_metrics.avg_room_rate|float)
+                    }}</small
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div class="col-lg-4">
+              <div class="metric-item">
+                <div class="metric-label">Performance Days</div>
+                <div class="metric-value">
+                  <span class="text-success"
+                    >{{ advanced_metrics.positive_variance_days|int }}</span
+                  >
+                  /
+                  <span class="text-danger"
+                    >{{ advanced_metrics.negative_variance_days|int }}</span
+                  >
+                  <small class="text-muted d-block">Positive / Negative</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Performance Insights Section -->
+  {% if performance_insights %}
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="chart-card">
+        <div class="chart-header">
+          <h5 class="mb-0">
+            <i class="fas fa-lightbulb me-2"></i>Performance Insights
+          </h5>
+        </div>
+        <div class="chart-body">
+          <div class="row">
+            {% for insight in performance_insights %}
+            <div class="col-lg-6 mb-3">
+              <div class="alert alert-{{ insight.type }} border-0 h-100">
+                <div class="d-flex align-items-start">
+                  <div class="flex-shrink-0 me-3">
+                    <i
+                      class="fas fa-{% if insight.type == 'success' %}check-circle{% elif insight.type == 'warning' %}exclamation-triangle{% elif insight.type == 'danger' %}times-circle{% else %}info-circle{% endif %} fa-lg"
+                    ></i>
+                  </div>
+                  <div class="flex-grow-1">
+                    <h6 class="alert-heading mb-2">{{ insight.title }}</h6>
+                    <p class="mb-0">{{ insight.message }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Chart Tabs -->
+  <div class="row">
+    <div class="col-12">
+      <div class="chart-card">
+        <div class="chart-header">
+          <ul
+            class="nav nav-tabs card-header-tabs"
+            id="chartTabs"
+            role="tablist"
+          >
+            <li class="nav-item" role="presentation">
+              <button
+                class="nav-link active"
+                id="trend-tab"
+                data-bs-toggle="tab"
+                data-bs-target="#trend-chart"
+                type="button"
+                role="tab"
+              >
+                <i class="fas fa-chart-line me-1"></i>Performance Trend
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button
+                class="nav-link"
+                id="variance-tab"
+                data-bs-toggle="tab"
+                data-bs-target="#variance-chart"
+                type="button"
+                role="tab"
+              >
+                <i class="fas fa-chart-bar me-1"></i>Variance Analysis
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button
+                class="nav-link"
+                id="comparison-tab"
+                data-bs-toggle="tab"
+                data-bs-target="#comparison-chart"
+                type="button"
+                role="tab"
+              >
+                <i class="fas fa-balance-scale me-1"></i>Target vs Actual
+              </button>
+            </li>
+          </ul>
+        </div>
+        <div class="chart-body">
+          <div class="tab-content" id="chartTabContent">
+            <!-- Performance Trend Chart -->
+            <div
+              class="tab-pane fade show active"
+              id="trend-chart"
+              role="tabpanel"
+            >
+              <div class="chart-container">
+                <canvas id="trendChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Variance Analysis Chart -->
+            <div class="tab-pane fade" id="variance-chart" role="tabpanel">
+              <div class="chart-container">
+                <canvas id="varianceChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Target vs Actual Comparison -->
+            <div class="tab-pane fade" id="comparison-chart" role="tabpanel">
+              <div class="chart-container">
+                <canvas id="comparisonChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enhanced Performance Data Table with Edit Functionality -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="table-card">
+        <div
+          class="table-header d-flex justify-content-between align-items-center"
+        >
+          <h5 class="mb-0">
+            <i class="fas fa-table me-2"></i>Detailed Performance Data
+          </h5>
+          <div class="d-flex align-items-center">
+            <input
+              type="text"
+              class="form-control form-control-sm me-2"
+              id="tableSearch"
+              placeholder="Search data..."
+              style="width: 200px"
+            />
+            <div class="dropdown">
+              <button
+                class="btn btn-sm btn-outline-secondary dropdown-toggle"
+                type="button"
+                data-bs-toggle="dropdown"
+              >
+                <i class="fas fa-sort me-1"></i>Sort
+              </button>
+              <ul class="dropdown-menu">
+                <li>
+                  <a class="dropdown-item sort-option" href="#" data-sort="date"
+                    >Date</a
+                  >
+                </li>
+                <li>
+                  <a
+                    class="dropdown-item sort-option"
+                    href="#"
+                    data-sort="room_rate"
+                    >Room Rate</a
+                  >
+                </li>
+                <li>
+                  <a
+                    class="dropdown-item sort-option"
+                    href="#"
+                    data-sort="revenue"
+                    >Revenue</a
+                  >
+                </li>
+                <li>
+                  <a
+                    class="dropdown-item sort-option"
+                    href="#"
+                    data-sort="variance"
+                    >Variance</a
+                  >
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {% if performance_data %}
+        <div class="table-responsive">
+          <table class="table performance-table" id="performanceTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Target Rate</th>
+                <th>Actual Rate</th>
+                <th>Rate Variance</th>
+                <th>Target Revenue</th>
+                <th>Actual Revenue</th>
+                <th>Revenue Variance</th>
+                <th>Performance</th>
+                <th class="table-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for data in performance_data %}
+              <tr class="data-row">
+                <td>
+                  <strong
+                    >{{ data.date.strftime('%m/%d/%Y') if data.date else 'N/A'
+                    }}</strong
+                  >
+                  <br /><small class="text-muted"
+                    >{{ data.date.strftime('%A') if data.date else '' }}</small
+                  >
+                </td>
+                <td>
+                  ${{ "%.2f"|format(data.target_room_rate|float if
+                  data.target_room_rate else 0) }}
+                </td>
+                <td>
+                  ${{ "%.2f"|format(data.actual_room_rate|float if
+                  data.actual_room_rate else 0) }}
+                </td>
+                <td>
+                  <span
+                    class="{% if (data.room_rate_variance or 0) >= 0 %}variance-positive{% else %}variance-negative{% endif %}"
+                  >
+                    ${{ "%.2f"|format(data.room_rate_variance|float if
+                    data.room_rate_variance else 0) }}
+                  </span>
+                  <br />
+                  <span
+                    class="badge badge-variance bg-{% if (data.room_rate_variance or 0) >= 0 %}success{% else %}danger{% endif %}"
+                  >
+                    {{ "%.1f"|format(data.room_rate_variance_pct|float if
+                    data.room_rate_variance_pct else 0) }}%
+                  </span>
+                </td>
+                <td>
+                  ${{ "%.2f"|format(data.target_revenue|float if
+                  data.target_revenue else 0) }}
+                </td>
+                <td>
+                  ${{ "%.2f"|format(data.actual_revenue|float if
+                  data.actual_revenue else 0) }}
+                </td>
+                <td>
+                  <span
+                    class="{% if (data.revenue_variance or 0) >= 0 %}variance-positive{% else %}variance-negative{% endif %}"
+                  >
+                    ${{ "%.2f"|format(data.revenue_variance|float if
+                    data.revenue_variance else 0) }}
+                  </span>
+                  <br />
+                  <span
+                    class="badge badge-variance bg-{% if (data.revenue_variance or 0) >= 0 %}success{% else %}danger{% endif %}"
+                  >
+                    {{ "%.1f"|format(data.revenue_variance_pct|float if
+                    data.revenue_variance_pct else 0) }}%
+                  </span>
+                </td>
+                <td>
+                  {% set avg_performance = ((data.room_rate_variance_pct|float
+                  if data.room_rate_variance_pct else 0) +
+                  (data.revenue_variance_pct|float if data.revenue_variance_pct
+                  else 0)) / 2 %} {% set progress_width = 100 if
+                  avg_performance|abs > 100 else avg_performance|abs %}
+                  <div class="d-flex align-items-center">
+                    <div class="progress flex-fill me-2" style="height: 8px">
+                      <div
+                        class="progress-bar bg-{% if avg_performance >= 0 %}success{% else %}danger{% endif %}"
+                        style="width: {{ progress_width }}%"
+                      ></div>
+                    </div>
+                    <small
+                      class="{% if avg_performance >= 0 %}text-success{% else %}text-danger{% endif %}"
+                    >
+                      {{ "%.1f"|format(avg_performance) }}%
+                    </small>
+                  </div>
+                </td>
+                <td class="table-actions">
+                  <div class="btn-group btn-group-sm" role="group">
+                    <button
+                      class="btn btn-outline-primary btn-edit"
+                      onclick="editDataEntry('{{ data.date.strftime('%Y-%m-%d') if data.date else '' }}', 
+                               {{ data.target_room_rate or 0 }}, 
+                               {{ data.actual_room_rate or 0 }}, 
+                               {{ data.target_revenue or 0 }}, 
+                               {{ data.actual_revenue or 0 }},
+                               '{{ (data.notes or '')|replace('\n', '\\n')|replace("'", "\\'") }}')"
+                      title="Edit this entry"
+                      data-bs-toggle="modal"
+                      data-bs-target="#dataEntryModal"
+                    >
+                      <i class="fas fa-edit"></i>
+                    </button>
+                    <button
+                      class="btn btn-outline-danger btn-delete"
+                      onclick="confirmDeleteEntry('{{ data.date.strftime('%Y-%m-%d') if data.date else '' }}')"
+                      title="Delete this entry"
+                    >
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="no-data-state">
+          <i class="fas fa-chart-line"></i>
+          <h5>No Performance Data Available</h5>
+          <p class="text-muted">
+            No data found for the selected date range. Try adjusting your
+            filters or add some performance data.
+          </p>
+          <a href="{{ url_for('index') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i>Add Performance Data
+          </a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Enhanced Data Entry Modal with Edit Support -->
+<div
+  class="modal fade"
+  id="dataEntryModal"
+  tabindex="-1"
+  aria-labelledby="dataEntryModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content" id="modalContent">
+      <!-- Enhanced Modal Header with Mode Indication -->
+      <div class="modal-header" id="modalHeader">
+        <h5 class="modal-title" id="dataEntryModalLabel">
+          <i class="fas fa-edit me-2" id="modalIcon"></i>
+          <span id="modalTitleText">Edit Performance Data</span>
+          <span class="modal-mode-indicator mode-edit" id="modeIndicator">Editing Entry</span>
+        </h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+          onclick="resetModalState()"
+        ></button>
+      </div>
+      <form id="dataEntryForm">
+        <div class="modal-body">
+          <!-- Alert container for messages -->
+          <div id="alertContainer"></div>
+
+          <!-- Hidden field to track edit mode -->
+          <input type="hidden" id="editMode" name="edit_mode" value="true">
+          <input type="hidden" id="originalDate" name="original_date" value="">
+
+          <div class="data-entry-form">
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="entryDate" class="form-label">Date</label>
+                <input
+                  type="date"
+                  class="form-control"
+                  id="entryDate"
+                  name="date"
+                  required
+                  disabled
+                />
+              </div>
+              <div class="col-md-6 mb-3">
+                <div class="form-text">
+                  <i class="fas fa-info-circle me-1"></i>
+                  <span id="modalInstructions">Modify the performance data for this date</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="targetRoomRate" class="form-label"
+                  >Target Room Rate ($)</label
+                >
+                <input
+                  type="number"
+                  class="form-control"
+                  id="targetRoomRate"
+                  name="target_room_rate"
+                  step="0.01"
+                  min="0"
+                  required
+                />
+              </div>
+              <div class="col-md-6 mb-3">
+                <label for="actualRoomRate" class="form-label"
+                  >Actual Room Rate ($)</label
+                >
+                <input
+                  type="number"
+                  class="form-control"
+                  id="actualRoomRate"
+                  name="actual_room_rate"
+                  step="0.01"
+                  min="0"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="targetRevenue" class="form-label"
+                  >Target Revenue ($)</label
+                >
+                <input
+                  type="number"
+                  class="form-control"
+                  id="targetRevenue"
+                  name="target_revenue"
+                  step="0.01"
+                  min="0"
+                  required
+                />
+              </div>
+              <div class="col-md-6 mb-3">
+                <label for="actualRevenue" class="form-label"
+                  >Actual Revenue ($)</label
+                >
+                <input
+                  type="number"
+                  class="form-control"
+                  id="actualRevenue"
+                  name="actual_revenue"
+                  step="0.01"
+                  min="0"
+                  required
+                />
+              </div>
+            </div>
+
+            <!-- Comments Section -->
+            <div class="comments-section">
+              <div class="row">
+                <div class="col-12 mb-3">
+                  <label for="performanceNotes" class="form-label">
+                    <i class="fas fa-comment-alt me-1"></i>Performance Notes &
+                    Comments
+                  </label>
+                  <textarea
+                    class="form-control"
+                    id="performanceNotes"
+                    name="notes"
+                    rows="3"
+                    placeholder="Add any notes about this day's performance, market conditions, special events, or operational insights..."
+                  ></textarea>
+                  <div class="form-text">
+                    <small
+                      ><i class="fas fa-lightbulb text-info me-1"></i>These
+                      notes will help with AI analysis and your own performance
+                      tracking.</small
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Live Variance Display -->
+            <div class="row" id="variancePreview" style="display: none">
+              <div class="col-12">
+                <div class="alert alert-info">
+                  <h6>Calculated Variances:</h6>
+                  <div class="row">
+                    <div class="col-md-6">
+                      <strong>Room Rate:</strong>
+                      <span id="roomRateVariance">$0.00</span>
+                      (<span id="roomRateVariancePct">0.0%</span>)
+                    </div>
+                    <div class="col-md-6">
+                      <strong>Revenue:</strong>
+                      <span id="revenueVariance">$0.00</span>
+                      (<span id="revenueVariancePct">0.0%</span>)
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Enhanced Modal Footer with Delete Option -->
+        <div class="modal-footer" id="modalFooter">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            data-bs-dismiss="modal"
+            onclick="resetModalState()"
+          >
+            Cancel
+          </button>
+          <!-- Delete button (visible in edit mode) -->
+          <button 
+            type="button" 
+            class="btn btn-danger" 
+            id="deleteDataBtn"
+            onclick="deleteDataEntry()"
+          >
+            <i class="fas fa-trash me-1"></i>Delete
+          </button>
+          <button type="submit" class="btn btn-primary" id="submitDataBtn">
+            <i class="fas fa-save me-1"></i><span id="submitBtnText">Update Data</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div
+  class="modal fade"
+  id="deleteConfirmModal"
+  tabindex="-1"
+  aria-labelledby="deleteConfirmModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title" id="deleteConfirmModalLabel">
+          <i class="fas fa-exclamation-triangle me-2"></i>Confirm Deletion
+        </h5>
+        <button
+          type="button"
+          class="btn-close btn-close-white"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex align-items-center">
+          <div class="flex-shrink-0 me-3">
+            <i class="fas fa-trash-alt fa-2x text-danger"></i>
+          </div>
+          <div class="flex-grow-1">
+            <h6 class="mb-2">Delete Performance Data</h6>
+            <p class="mb-1">Are you sure you want to delete the performance data for <strong id="deleteConfirmDate">this date</strong>?</p>
+            <p class="mb-0 text-muted small">This action cannot be undone.</p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+          <i class="fas fa-trash me-1"></i>Delete Data
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="loading-overlay d-none">
+  <div class="text-center">
+    <div class="spinner-border text-light" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+    <div class="mt-2">Processing...</div>
+  </div>
+</div>
+
+{% endblock %} {% block extra_js %}
+<script>
+  // ========================================
+  // EMBEDDED CHART FUNCTIONALITY - FIXED VERSION
+  // ========================================
+
+  // Global variables from Flask template
+  let performanceData = {{ performance_data | tojson if performance_data else '[]' }};
+  let summaryStats = {{ summary_stats | tojson if summary_stats else '{}' }};
+  let advancedMetrics = {{ advanced_metrics | tojson if advanced_metrics else '{}' }};
+  let performanceInsights = {{ performance_insights | tojson if performance_insights else '[]' }};
+
+  // Chart instances storage
+  let charts = {};
+
+  // Chart color configuration
+  const chartColors = {
+    primary: '#007bff',
+    secondary: '#6c757d',
+    success: '#28a745',
+    danger: '#dc3545',
+    warning: '#ffc107',
+    info: '#17a2b8'
+  };
+
+  // NEW: Edit functionality state
+  let editState = {
+    isSubmitting: false,
+    currentMode: 'edit',
+    editingDate: null,
+    pendingDeleteDate: null
+  };
+
+  // ========================================
+  // INITIALIZATION AND EVENT HANDLERS
+  // ========================================
+
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, checking for Chart.js...');
+    console.log('Performance data:', performanceData);
+    console.log('Summary stats:', summaryStats);
+
+    // Ensure Chart.js is loaded before proceeding
+    checkChartJSAndInitialize();
+  });
+
+  function checkChartJSAndInitialize() {
+    let attempts = 0;
+    const maxAttempts = 50; // 5 seconds max wait
+
+    const checkChart = setInterval(() => {
+      attempts++;
+
+      if (typeof Chart !== 'undefined') {
+        console.log('Chart.js found! Initializing charts...');
+        clearInterval(checkChart);
+        initializeReports();
+        setupEventListeners();
+        loadAllCharts();
+      } else if (attempts >= maxAttempts) {
+        console.error('Chart.js failed to load after 5 seconds');
+        clearInterval(checkChart);
+        showChartLoadError();
+      }
+    }, 100);
+  }
+
+  function showChartLoadError() {
+    const chartContainers = document.querySelectorAll('.chart-container');
+    chartContainers.forEach(container => {
+      container.innerHTML = `
+        <div class="chart-error">
+          <i class="fas fa-exclamation-triangle"></i>
+          <h6>Chart Library Failed to Load</h6>
+          <p>Unable to load Chart.js. Please refresh the page.</p>
+          <button class="btn btn-sm btn-primary" onclick="window.location.reload()">
+            <i class="fas fa-redo me-1"></i>Refresh Page
+          </button>
+        </div>
+      `;
+    });
+  }
+
+  function initializeReports() {
+    console.log('Initializing reports with:', {
+      dataPoints: performanceData.length,
+      summaryStats: Object.keys(summaryStats).length,
+      advancedMetrics: Object.keys(advancedMetrics).length,
+      insights: performanceInsights.length
+    });
+
+    // Set date input constraints
+    const today = new Date().toISOString().split('T')[0];
+    const startDateInput = document.getElementById('startDate');
+    const endDateInput = document.getElementById('endDate');
+
+    if (startDateInput) startDateInput.max = today;
+    if (endDateInput) endDateInput.max = today;
+
+    // Initialize table search
+    setupTableSearch();
+
+    // Initialize edit form
+    setupEditForm();
+
+    // Show data status message
+    showDataStatusMessage();
+  }
+
+  function showDataStatusMessage() {
+    if (performanceData.length === 0) {
+      showDataMessage('No data available for the selected date range. Try adjusting your filters or add some performance data.');
+    } else {
+      showDataMessage(`Loaded ${performanceData.length} data points for analysis.`, 'success');
+    }
+  }
+
+  // ========================================
+  // NEW: EDIT FUNCTIONALITY
+  // ========================================
+
+  function setupEditForm() {
+    console.log('Setting up edit form functionality...');
+
+    const form = document.getElementById('dataEntryForm');
+    if (!form) {
+      console.error('Edit form not found');
+      return;
+    }
+
+    // Remove any existing event listeners first
+    const newForm = form.cloneNode(true);
+    form.parentNode.replaceChild(newForm, form);
+
+    // Add single event listener to the fresh form
+    newForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      console.log('Edit form submit triggered, current state:', editState);
+
+      if (editState.isSubmitting) {
+        console.log('Already submitting, ignoring...');
+        return false;
+      }
+
+      updatePerformanceData();
+      return false;
+    });
+
+    // Form input listeners for live variance calculation
+    const inputs = ['targetRoomRate', 'actualRoomRate', 'targetRevenue', 'actualRevenue'];
+    inputs.forEach(inputId => {
+      const input = document.getElementById(inputId);
+      if (input) {
+        input.addEventListener('input', calculateVariances);
+      }
+    });
+
+    // Setup delete confirmation
+    setupDeleteConfirmation();
+
+    console.log('Edit form setup complete');
+  }
+
+  function setupDeleteConfirmation() {
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    if (confirmDeleteBtn) {
+      confirmDeleteBtn.addEventListener('click', function() {
+        if (editState.pendingDeleteDate) {
+          performDeleteEntry(editState.pendingDeleteDate);
+        }
+      });
+    }
+  }
+
+  function editDataEntry(date, targetRoom, actualRoom, targetRev, actualRev, notes) {
+    console.log('Edit data entry called:', { date, targetRoom, actualRoom, targetRev, actualRev, notes });
+    
+    const data = {
+      date: date,
+      target_room_rate: targetRoom,
+      actual_room_rate: actualRoom,
+      target_revenue: targetRev,
+      actual_revenue: actualRev,
+      notes: notes || ''
+    };
+    
+    setModalMode('edit', data);
+  }
+
+  function setModalMode(mode, data = null) {
+    console.log('Setting modal mode:', mode, data);
+    
+    editState.currentMode = mode;
+    
+    const modalHeader = document.getElementById('modalHeader');
+    const modalIcon = document.getElementById('modalIcon');
+    const modalTitleText = document.getElementById('modalTitleText');
+    const modeIndicator = document.getElementById('modeIndicator');
+    const modalInstructions = document.getElementById('modalInstructions');
+    const deleteBtn = document.getElementById('deleteDataBtn');
+    const submitBtnText = document.getElementById('submitBtnText');
+    const editModeInput = document.getElementById('editMode');
+    const originalDateInput = document.getElementById('originalDate');
+
+    // Always in edit mode for reports
+    modalHeader.className = 'modal-header edit-mode';
+    modalIcon.className = 'fas fa-edit me-2';
+    modalTitleText.textContent = 'Edit Performance Data';
+    modeIndicator.className = 'modal-mode-indicator mode-edit';
+    modeIndicator.textContent = 'Editing Entry';
+    modalInstructions.textContent = 'Modify the performance data for this date';
+    deleteBtn.style.display = 'inline-block';
+    submitBtnText.textContent = 'Update Data';
+    editModeInput.value = 'true';
+    originalDateInput.value = data ? data.date : '';
+    
+    // Populate form with existing data
+    if (data) {
+      populateForm(data);
+      editState.editingDate = data.date;
+    }
+  }
+
+  function populateForm(data) {
+    console.log('Populating form with data:', data);
+    
+    // Set form values
+    document.getElementById('entryDate').value = data.date;
+    document.getElementById('targetRoomRate').value = data.target_room_rate;
+    document.getElementById('actualRoomRate').value = data.actual_room_rate;
+    document.getElementById('targetRevenue').value = data.target_revenue;
+    document.getElementById('actualRevenue').value = data.actual_revenue;
+    document.getElementById('performanceNotes').value = data.notes || '';
+    
+    // Calculate and show variances
+    calculateVariances();
+  }
+
+  function resetModalState() {
+    console.log('Resetting modal state');
+    
+    // Reset form state
+    editState.isSubmitting = false;
+    editState.editingDate = null;
+    editState.pendingDeleteDate = null;
+  }
+
+  function calculateVariances() {
+    const targetRoom = parseFloat(document.getElementById('targetRoomRate').value) || 0;
+    const actualRoom = parseFloat(document.getElementById('actualRoomRate').value) || 0;
+    const targetRev = parseFloat(document.getElementById('targetRevenue').value) || 0;
+    const actualRev = parseFloat(document.getElementById('actualRevenue').value) || 0;
+
+    if (targetRoom > 0 && actualRoom > 0 && targetRev > 0 && actualRev > 0) {
+      const roomVariance = actualRoom - targetRoom;
+      const roomVariancePct = (roomVariance / targetRoom) * 100;
+      const revVariance = actualRev - targetRev;
+      const revVariancePct = (revVariance / targetRev) * 100;
+
+      document.getElementById('roomRateVariance').textContent = `$${roomVariance.toFixed(2)}`;
+      document.getElementById('roomRateVariancePct').textContent = `${roomVariancePct.toFixed(1)}%`;
+      document.getElementById('revenueVariance').textContent = `$${revVariance.toFixed(2)}`;
+      document.getElementById('revenueVariancePct').textContent = `${revVariancePct.toFixed(1)}%`;
+
+      document.getElementById('variancePreview').style.display = 'block';
+    }
+  }
+
+  function updatePerformanceData() {
+    console.log('=== STARTING DATA UPDATE ===');
+    
+    const form = document.getElementById('dataEntryForm');
+    const submitBtn = document.getElementById('submitDataBtn');
+
+    if (!form || !submitBtn) {
+      console.error('Form or submit button not found');
+      return;
+    }
+
+    // Validate form data before submission
+    if (!validateFormData(form)) {
+      return;
+    }
+
+    // Set submission state immediately
+    editState.isSubmitting = true;
+
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+
+    console.log('Updating data:', data);
+
+    const originalButtonText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Updating...';
+    submitBtn.disabled = true;
+
+    // Disable entire form during submission
+    disableForm(form, true);
+
+    fetch('/update', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data)
+    })
+    .then(response => {
+      console.log('Update response received:', response.status);
+      return response.json();
+    })
+    .then(result => {
+      console.log('Update result received:', result);
+
+      if (result.success) {
+        showReportsNotification('Success! Performance data updated successfully.', 'success');
+
+        setTimeout(() => {
+          const modal = bootstrap.Modal.getInstance(document.getElementById('dataEntryModal'));
+          if (modal) modal.hide();
+          setTimeout(() => location.reload(), 1500);
+        }, 1500);
+      } else {
+        showReportsNotification('Error: ' + (result.error || 'Failed to update data'), 'error');
+      }
+    })
+    .catch(error => {
+      console.error('Error updating data:', error);
+      showReportsNotification('Network error. Please check your connection and try again.', 'error');
+    })
+    .finally(() => {
+      console.log('Update complete, resetting state...');
+
+      // Reset state properly
+      editState.isSubmitting = false;
+
+      submitBtn.innerHTML = originalButtonText;
+      submitBtn.disabled = false;
+
+      disableForm(form, false);
+
+      console.log('Update state reset complete');
+    });
+  }
+
+  function confirmDeleteEntry(date) {
+    console.log('Confirming delete for date:', date);
+    
+    editState.pendingDeleteDate = date;
+    
+    // Update confirmation modal with date
+    const deleteConfirmDate = document.getElementById('deleteConfirmDate');
+    if (deleteConfirmDate) {
+      const formattedDate = new Date(date).toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      deleteConfirmDate.textContent = formattedDate;
+    }
+    
+    // Show confirmation modal
+    const confirmModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+    confirmModal.show();
+  }
+
+  function deleteDataEntry() {
+    const dateToDelete = editState.editingDate || document.getElementById('entryDate').value;
+    
+    if (!dateToDelete) {
+      showReportsNotification('No date specified for deletion', 'error');
+      return;
+    }
+    
+    performDeleteEntry(dateToDelete);
+  }
+
+  function performDeleteEntry(dateToDelete) {
+    console.log('Deleting data for date:', dateToDelete);
+    
+    const deleteBtn = document.getElementById('confirmDeleteBtn') || document.getElementById('deleteDataBtn');
+    const originalText = deleteBtn.innerHTML;
+    
+    deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Deleting...';
+    deleteBtn.disabled = true;
+    
+    fetch('/delete-data', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ date: dateToDelete })
+    })
+    .then(response => response.json())
+    .then(result => {
+      if (result.success) {
+        showReportsNotification('Performance data deleted successfully', 'success');
+        
+        // Close both modals
+        const editModal = bootstrap.Modal.getInstance(document.getElementById('dataEntryModal'));
+        const confirmModal = bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal'));
+        
+        if (editModal) editModal.hide();
+        if (confirmModal) confirmModal.hide();
+        
+        setTimeout(() => {
+          location.reload();
+        }, 1500);
+      } else {
+        showReportsNotification('Error: ' + (result.error || 'Failed to delete data'), 'error');
+      }
+    })
+    .catch(error => {
+      console.error('Error deleting data:', error);
+      showReportsNotification('Network error. Please try again.', 'error');
+    })
+    .finally(() => {
+      deleteBtn.innerHTML = originalText;
+      deleteBtn.disabled = false;
+      editState.pendingDeleteDate = null;
+    });
+  }
+
+  // Helper functions for edit functionality
+  function validateFormData(form) {
+    const requiredFields = form.querySelectorAll('[required]');
+    let isValid = true;
+
+    requiredFields.forEach(field => {
+      if (!field.value.trim()) {
+        field.classList.add('is-invalid');
+        isValid = false;
+      } else {
+        field.classList.remove('is-invalid');
+      }
+    });
+
+    if (!isValid) {
+      showReportsNotification('Please fill in all required fields.', 'warning');
+    }
+
+    return isValid;
+  }
+
+  function disableForm(form, disabled) {
+    const inputs = form.querySelectorAll('input, select, textarea, button');
+    inputs.forEach(input => {
+      input.disabled = disabled;
+    });
+  }
+
+  // Reports-specific notification system
+  function showReportsNotification(message, type = 'info') {
+    console.log(`Reports Notification [${type}]: ${message}`);
+
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    notification.style.top = '20px';
+    notification.style.right = '20px';
+    notification.style.zIndex = '9999';
+    notification.style.minWidth = '300px';
+    notification.style.maxWidth = '500px';
+
+    const iconMap = {
+      'success': 'check-circle',
+      'error': 'exclamation-triangle',
+      'warning': 'exclamation-circle',
+      'info': 'info-circle'
+    };
+
+    notification.innerHTML = `
+      <i class="fas fa-${iconMap[type] || 'info-circle'} me-2"></i>
+      ${message}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    document.body.appendChild(notification);
+
+    // Auto-remove after delay (longer for errors)
+    const delay = type === 'error' ? 8000 : type === 'warning' ? 6000 : 4000;
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, delay);
+  }
+
+  // ========================================
+  // DATA PROCESSING FUNCTIONS
+  // ========================================
+
+  function processDataForCharts(data) {
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      console.warn('No valid data for charts:', data);
+      return [];
+    }
+
+    return data.map((item, index) => {
+      try {
+        // Handle both dictionary and object formats from Supabase
+        const processedItem = {
+          date: parseChartDateFixed(item.date, index),
+          target_room_rate: safeFloat(item.target_room_rate),
+          actual_room_rate: safeFloat(item.actual_room_rate),
+          target_revenue: safeFloat(item.target_revenue),
+          actual_revenue: safeFloat(item.actual_revenue),
+          room_rate_variance: safeFloat(item.room_rate_variance),
+          revenue_variance: safeFloat(item.revenue_variance),
+          room_rate_variance_pct: safeFloat(item.room_rate_variance_pct),
+          revenue_variance_pct: safeFloat(item.revenue_variance_pct)
+        };
+
+        console.log(`Processed item ${index}:`, processedItem);
+        return processedItem;
+      } catch (error) {
+        console.error(`Error processing data item ${index}:`, error, item);
+        return null;
+      }
+    }).filter(item => item !== null); // Remove failed items
+  }
+
+  function parseChartDateFixed(dateInput, itemIndex = 'unknown') {
+  console.log(`Parsing date for item ${itemIndex}:`, dateInput, typeof dateInput);
+  
+  if (!dateInput) {
+    console.error(`No date provided for item ${itemIndex}, this item will be skipped`);
+    return null; // ✅ FIXED: Return null instead of current date
+  }
+
+  // If it's already a Date object, return it
+  if (dateInput instanceof Date) {
+    console.log(`Item ${itemIndex}: Already a Date object:`, dateInput);
+    return dateInput;
+  }
+
+  // If it's a string, try to parse it
+  if (typeof dateInput === 'string') {
+    try {
+      // Handle various string formats
+      let cleanDateString = dateInput.trim();
+      
+      // Remove time part if present (ISO format)
+      if (cleanDateString.includes('T')) {
+        cleanDateString = cleanDateString.split('T')[0];
+      }
+      
+      // Remove timezone info
+      cleanDateString = cleanDateString.replace('Z', '').replace(/[+-]\d{2}:\d{2}$/, '');
+      
+      // Try to parse as YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDateString)) {
+        const parsed = new Date(cleanDateString + 'T00:00:00');
+        if (!isNaN(parsed.getTime())) {
+          console.log(`Item ${itemIndex}: Successfully parsed string date:`, cleanDateString, '->', parsed);
+          return parsed;
+        }
+      }
+      
+      // Try direct parsing
+      const directParsed = new Date(dateInput);
+      if (!isNaN(directParsed.getTime())) {
+        console.log(`Item ${itemIndex}: Successfully parsed via direct parsing:`, dateInput, '->', directParsed);
+        return directParsed;
+      }
+      
+      console.error(`Item ${itemIndex}: Failed to parse date string:`, dateInput);
+      return null;
+      
+    } catch (e) {
+      console.error(`Item ${itemIndex}: Error parsing date string:`, dateInput, e);
+      return null;
+    }
+  }
+
+  // Handle object with date property
+  if (typeof dateInput === 'object' && dateInput.date) {
+    console.log(`Item ${itemIndex}: Object with date property, recursing...`);
+    return parseChartDateFixed(dateInput.date, itemIndex);
+  }
+
+  console.error(`Item ${itemIndex}: Unknown date format:`, dateInput, typeof dateInput);
+  return null;
+}
+  function safeFloat(value, fallback = 0) {
+    if (value === null || value === undefined || value === '') {
+      return fallback;
+    }
+
+    const parsed = parseFloat(value);
+    if (isNaN(parsed)) {
+      console.warn('Failed to parse float:', value, 'using fallback:', fallback);
+      return fallback;
+    }
+
+    return parsed;
+  }
+
+  // ========================================
+  // CHART CREATION FUNCTIONS (unchanged from original)
+  // ========================================
+
+  function loadAllCharts() {
+    console.log('Loading all charts with data:', performanceData.length, 'records');
+
+    if (performanceData && performanceData.length > 0) {
+      createTrendChart();
+      createVarianceChart();
+      createComparisonChart();
+    } else {
+      console.log('No data available, showing no-data state');
+      showNoDataState();
+    }
+  }
+
+  function createTrendChart() {
+    console.log('Creating trend chart...');
+
+    const canvas = document.getElementById('trendChart');
+    if (!canvas) {
+      console.error('trendChart canvas not found');
+      return;
+    }
+
+    const ctx = canvas.getContext('2d');
+
+    // Destroy existing chart
+    if (charts.trendChart) {
+      charts.trendChart.destroy();
+    }
+
+    const processedData = processDataForCharts(performanceData);
+
+    if (processedData.length === 0) {
+      showChartError('trendChart', 'No data available for trend analysis');
+      return;
+    }
+
+    // Prepare chart data
+    const labels = processedData.map(item => {
+      return item.date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric'
+      });
+    });
+
+    const roomRateData = processedData.map(item => item.actual_room_rate);
+    const revenueData = processedData.map(item => item.actual_revenue);
+    const targetRoomRateData = processedData.map(item => item.target_room_rate);
+    const targetRevenueData = processedData.map(item => item.target_revenue);
+
+    console.log('Trend chart data prepared:', {
+      labels: labels.length,
+      roomRateData: roomRateData.length,
+      revenueData: revenueData.length
+    });
+
+    try {
+      charts.trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Actual Room Rate ($)',
+            data: roomRateData,
+            borderColor: chartColors.primary,
+            backgroundColor: chartColors.primary + '20',
+            tension: processedData.length === 1 ? 0 : 0.4,
+            pointRadius: processedData.length === 1 ? 8 : 4,
+            pointHoverRadius: 6,
+            yAxisID: 'y'
+          }, {
+            label: 'Target Room Rate ($)',
+            data: targetRoomRateData,
+            borderColor: chartColors.secondary,
+            backgroundColor: 'transparent',
+            borderDash: [5, 5],
+            tension: processedData.length === 1 ? 0 : 0.4,
+            pointRadius: processedData.length === 1 ? 8 : 4,
+            pointHoverRadius: 6,
+            yAxisID: 'y'
+          }, {
+            label: 'Actual Revenue ($)',
+            data: revenueData,
+            borderColor: chartColors.success,
+            backgroundColor: chartColors.success + '20',
+            tension: processedData.length === 1 ? 0 : 0.4,
+            pointRadius: processedData.length === 1 ? 8 : 4,
+            pointHoverRadius: 6,
+            yAxisID: 'y1'
+          }, {
+            label: 'Target Revenue ($)',
+            data: targetRevenueData,
+            borderColor: chartColors.warning,
+            backgroundColor: 'transparent',
+            borderDash: [5, 5],
+            tension: processedData.length === 1 ? 0 : 0.4,
+            pointRadius: processedData.length === 1 ? 8 : 4,
+            pointHoverRadius: 6,
+            yAxisID: 'y1'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: processedData.length === 1 ? 'Single Day Performance' : 'Performance Trend - Actual vs Target'
+            },
+            legend: {
+              display: true,
+              position: 'top'
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false,
+              callbacks: {
+                title: function(tooltipItems) {
+                  const date = processedData[tooltipItems[0].dataIndex].date;
+                  return date.toLocaleDateString('en-US', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric'
+                  });
+                },
+                label: function(context) {
+                  const label = context.dataset.label || '';
+                  const value = context.parsed.y;
+                  return label + ': $' + value.toLocaleString('en-US', {
+                    minimumFractionDigits: label.includes('Rate') ? 2 : 0,
+                    maximumFractionDigits: label.includes('Rate') ? 2 : 0
+                  });
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: 'Date'
+              }
+            },
+            y: {
+              type: 'linear',
+              display: true,
+              position: 'left',
+              title: {
+                display: true,
+                text: 'Room Rate ($)'
+              },
+              ticks: {
+                callback: function(value) {
+                  return '$' + value.toFixed(2);
+                }
+              }
+            },
+            y1: {
+              type: 'linear',
+              display: true,
+              position: 'right',
+              title: {
+                display: true,
+                text: 'Revenue ($)'
+              },
+              grid: {
+                drawOnChartArea: false
+              },
+              ticks: {
+                callback: function(value) {
+                  return '$' + value.toLocaleString();
+                }
+              }
+            }
+          },
+          interaction: {
+            mode: 'index',
+            intersect: false
+          }
+        }
+      });
+
+      console.log('Trend chart created successfully');
+    } catch (error) {
+      console.error('Error creating trend chart:', error);
+      showChartError('trendChart', 'Error creating chart: ' + error.message);
+    }
+  }
+
+  function createVarianceChart() {
+    console.log('Creating variance chart...');
+
+    const canvas = document.getElementById('varianceChart');
+    if (!canvas) {
+      console.error('varianceChart canvas not found');
+      return;
+    }
+
+    const ctx = canvas.getContext('2d');
+
+    // Destroy existing chart
+    if (charts.varianceChart) {
+      charts.varianceChart.destroy();
+    }
+
+    const processedData = processDataForCharts(performanceData);
+
+    if (processedData.length === 0) {
+      showChartError('varianceChart', 'No data available for variance analysis');
+      return;
+    }
+
+    const labels = processedData.map(item => {
+      return item.date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric'
+      });
+    });
+
+    const roomRateVariance = processedData.map(item => item.room_rate_variance_pct);
+    const revenueVariance = processedData.map(item => item.revenue_variance_pct);
+
+    try {
+      charts.varianceChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Room Rate Variance (%)',
+            data: roomRateVariance,
+            backgroundColor: roomRateVariance.map(val =>
+              val >= 0 ? chartColors.success + 'CC' : chartColors.danger + 'CC'
+            ),
+            borderColor: roomRateVariance.map(val =>
+              val >= 0 ? chartColors.success : chartColors.danger
+            ),
+            borderWidth: 1
+          }, {
+            label: 'Revenue Variance (%)',
+            data: revenueVariance,
+            backgroundColor: revenueVariance.map(val =>
+              val >= 0 ? chartColors.primary + 'CC' : chartColors.warning + 'CC'
+            ),
+            borderColor: revenueVariance.map(val =>
+              val >= 0 ? chartColors.primary : chartColors.warning
+            ),
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Variance Analysis - Performance vs Targets'
+            },
+            legend: {
+              display: true,
+              position: 'top'
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'Variance (%)'
+              },
+              ticks: {
+                callback: function(value) {
+                  return value + '%';
+                }
+              }
+            }
+          }
+        }
+      });
+
+      console.log('Variance chart created successfully');
+    } catch (error) {
+      console.error('Error creating variance chart:', error);
+      showChartError('varianceChart', 'Error creating chart: ' + error.message);
+    }
+  }
+
+  function createComparisonChart() {
+    console.log('Creating comparison chart...');
+
+    const canvas = document.getElementById('comparisonChart');
+    if (!canvas) {
+      console.error('comparisonChart canvas not found');
+      return;
+    }
+
+    const ctx = canvas.getContext('2d');
+
+    // Destroy existing chart
+    if (charts.comparisonChart) {
+      charts.comparisonChart.destroy();
+    }
+
+    const processedData = processDataForCharts(performanceData);
+
+    if (processedData.length === 0) {
+      showChartError('comparisonChart', 'No data available for comparison');
+      return;
+    }
+
+    const labels = processedData.map(item => {
+      return item.date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric'
+      });
+    });
+
+    const targetRevenue = processedData.map(item => item.target_revenue);
+    const actualRevenue = processedData.map(item => item.actual_revenue);
+
+    try {
+      charts.comparisonChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Target Revenue',
+            data: targetRevenue,
+            backgroundColor: chartColors.secondary + 'CC',
+            borderColor: chartColors.secondary,
+            borderWidth: 1
+          }, {
+            label: 'Actual Revenue',
+            data: actualRevenue,
+            backgroundColor: actualRevenue.map((actual, index) =>
+              actual >= targetRevenue[index]
+                ? chartColors.success + 'CC'
+                : chartColors.danger + 'CC'
+            ),
+            borderColor: actualRevenue.map((actual, index) =>
+              actual >= targetRevenue[index]
+                ? chartColors.success
+                : chartColors.danger
+            ),
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Revenue Performance - Target Achievement Analysis'
+            },
+            legend: {
+              display: true,
+              position: 'top'
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return context.dataset.label + ': $' + context.parsed.y.toLocaleString();
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'Revenue ($)'
+              },
+              ticks: {
+                callback: function(value) {
+                  return '$' + value.toLocaleString();
+                }
+              }
+            }
+          }
+        }
+      });
+
+      console.log('Comparison chart created successfully');
+    } catch (error) {
+      console.error('Error creating comparison chart:', error);
+      showChartError('comparisonChart', 'Error creating chart: ' + error.message);
+    }
+  }
+
+  // ========================================
+  // CHART ERROR HANDLING (unchanged)
+  // ========================================
+
+  function showChartError(chartId, message = 'No data available') {
+    console.log('Showing chart error for', chartId, ':', message);
+    const canvas = document.getElementById(chartId);
+    if (canvas) {
+      const container = canvas.parentElement;
+      container.innerHTML = `
+        <div class="chart-error">
+          <i class="fas fa-chart-line"></i>
+          <h6>Chart Unavailable</h6>
+          <p>${message}</p>
+          <button class="btn btn-sm btn-primary" onclick="window.location.href='{{ url_for('index') }}'">
+            <i class="fas fa-plus me-1"></i>Add Data
+          </button>
+        </div>
+      `;
+    }
+  }
+
+  function showNoDataState() {
+    console.log('Showing no data state for all charts');
+    const chartIds = ['trendChart', 'varianceChart', 'comparisonChart'];
+    chartIds.forEach(chartId => {
+      showChartError(chartId, 'Add some performance data to see this chart.');
+    });
+  }
+
+  // ========================================
+  // EVENT LISTENERS AND UTILITY FUNCTIONS (unchanged from original)
+  // ========================================
+
+  function setupEventListeners() {
+    // Date input validation
+    const startDateInput = document.getElementById('startDate');
+    const endDateInput = document.getElementById('endDate');
+
+    if (startDateInput) {
+      startDateInput.addEventListener('change', function() {
+        const endDate = document.getElementById('endDate');
+        if (endDate) {
+          endDate.min = this.value;
+        }
+      });
+    }
+
+    if (endDateInput) {
+      endDateInput.addEventListener('change', function() {
+        const startDate = document.getElementById('startDate');
+        if (startDate) {
+          startDate.max = this.value;
+        }
+      });
+    }
+
+    // Export buttons
+    const exportPdfBtn = document.getElementById('exportPdfBtn');
+    const exportExcelBtn = document.getElementById('exportExcelBtn');
+    const refreshDataBtn = document.getElementById('refreshDataBtn');
+
+    if (exportPdfBtn) exportPdfBtn.addEventListener('click', exportToPDF);
+    if (exportExcelBtn) exportExcelBtn.addEventListener('click', exportToExcel);
+    if (refreshDataBtn) refreshDataBtn.addEventListener('click', refreshData);
+
+    // Chart tab switching with proper chart loading
+    document.querySelectorAll('#chartTabs button').forEach(tab => {
+      tab.addEventListener('shown.bs.tab', function(e) {
+        const targetChart = e.target.getAttribute('data-bs-target');
+        setTimeout(() => {
+          switch(targetChart) {
+            case '#trend-chart':
+              createTrendChart();
+              break;
+            case '#variance-chart':
+              createVarianceChart();
+              break;
+            case '#comparison-chart':
+              createComparisonChart();
+              break;
+          }
+        }, 100);
+      });
+    });
+
+    // Table sorting
+    document.querySelectorAll('.sort-option').forEach(option => {
+      option.addEventListener('click', function(e) {
+        e.preventDefault();
+        sortTable(this.dataset.sort);
+      });
+    });
+  }
+
+  function setupTableSearch() {
+    const searchInput = document.getElementById('tableSearch');
+    if (searchInput) {
+      searchInput.addEventListener('input', function() {
+        filterTable(this.value);
+      });
+    }
+  }
+
+  // ========================================
+  // UTILITY FUNCTIONS (unchanged from original)
+  // ========================================
+
+  function setDateRange(days) {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - days);
+
+    const startInput = document.getElementById('startDate');
+    const endInput = document.getElementById('endDate');
+
+    if (startInput) startInput.value = startDate.toISOString().split('T')[0];
+    if (endInput) endInput.value = endDate.toISOString().split('T')[0];
+  }
+
+  function applyDateFilter() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+
+    if (!startDate || !endDate) {
+      alert('Please select both start and end dates');
+      return;
+    }
+
+    if (new Date(startDate) > new Date(endDate)) {
+      alert('Start date cannot be after end date');
+      return;
+    }
+
+    showLoading();
+    document.getElementById('dateRangeForm').submit();
+  }
+
+  function filterTable(searchTerm) {
+    const table = document.getElementById('performanceTable');
+    if (!table) return;
+
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+      const text = row.textContent.toLowerCase();
+      const matches = text.includes(searchTerm.toLowerCase());
+      row.style.display = matches ? '' : 'none';
+    });
+  }
+
+  function sortTable(column) {
+    const table = document.getElementById('performanceTable');
+    if (!table) return;
+
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    rows.sort((a, b) => {
+      let aVal, bVal;
+
+      switch(column) {
+        case 'date':
+          aVal = new Date(a.cells[0].textContent.trim());
+          bVal = new Date(b.cells[0].textContent.trim());
+          break;
+        case 'room_rate':
+          aVal = parseFloat(a.cells[2].textContent.replace(/[$,]/g, ''));
+          bVal = parseFloat(b.cells[2].textContent.replace(/[$,]/g, ''));
+          break;
+        case 'revenue':
+          aVal = parseFloat(a.cells[5].textContent.replace(/[$,]/g, ''));
+          bVal = parseFloat(b.cells[5].textContent.replace(/[$,]/g, ''));
+          break;
+        default:
+          return 0;
+      }
+
+      return aVal > bVal ? 1 : -1;
+    });
+
+    rows.forEach(row => tbody.appendChild(row));
+  }
+
+  function exportToPDF() {
+    showLoading();
+    setTimeout(() => {
+      window.print();
+      hideLoading();
+    }, 500);
+  }
+
+  function exportToExcel() {
+    showLoading();
+
+    try {
+      if (typeof XLSX !== 'undefined' && performanceData.length > 0) {
+        const wb = XLSX.utils.book_new();
+
+        // Performance data sheet
+        const performanceSheet = XLSX.utils.json_to_sheet(performanceData);
+        XLSX.utils.book_append_sheet(wb, performanceSheet, "Performance Data");
+
+        // Summary stats sheet
+        const summarySheet = XLSX.utils.json_to_sheet([summaryStats]);
+        XLSX.utils.book_append_sheet(wb, summarySheet, "Summary Statistics");
+
+        // Advanced metrics sheet
+        const metricsSheet = XLSX.utils.json_to_sheet([advancedMetrics]);
+        XLSX.utils.book_append_sheet(wb, metricsSheet, "Advanced Metrics");
+
+        XLSX.writeFile(wb, `hotel_performance_report_${new Date().toISOString().split('T')[0]}.xlsx`);
+      } else {
+        alert('Excel export not available or no data to export');
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Export failed. Please try again.');
+    }
+
+    hideLoading();
+  }
+
+  function refreshData() {
+    showLoading();
+    window.location.reload();
+  }
+
+  function showLoading() {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) overlay.classList.remove('d-none');
+  }
+
+  function hideLoading() {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) overlay.classList.add('d-none');
+  }
+
+  function showDataMessage(message, type = 'info') {
+    // Create or update data message
+    const existingMessage = document.getElementById('dataMessage');
+    if (existingMessage) {
+      existingMessage.remove();
+    }
+
+    const messageDiv = document.createElement('div');
+    messageDiv.id = 'dataMessage';
+    messageDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    messageDiv.innerHTML = `
+      <i class="fas fa-info-circle me-2"></i>${message}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    const container = document.querySelector('.container-fluid');
+    container.insertBefore(messageDiv, container.firstChild);
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+      if (messageDiv && messageDiv.parentNode) {
+        messageDiv.remove();
+      }
+    }, 5000);
+  }
+
+  // ========================================
+  // DEBUG FUNCTION
+  // ========================================
+
+  window.debugReportsData = function() {
+    console.log('=== EMBEDDED CHARTS DEBUG INFO ===');
+    console.log('Performance data:', performanceData);
+    console.log('Summary stats:', summaryStats);
+    console.log('Advanced metrics:', advancedMetrics);
+    console.log('Performance insights:', performanceInsights);
+    console.log('Chart.js available:', typeof Chart !== 'undefined');
+    console.log('Charts created:', Object.keys(charts));
+    console.log('Edit state:', editState);
+
+    if (performanceData.length > 0) {
+      console.log('Sample data item:', performanceData[0]);
+      console.log('Data item keys:', Object.keys(performanceData[0]));
+      console.log('Processed sample:', processDataForCharts([performanceData[0]]));
+    }
+  };
+
+  // Global function for debugging edit functionality
+  window.debugEditFunctionality = function() {
+    console.log('=== EDIT FUNCTIONALITY DEBUG ===');
+    console.log('Edit state:', editState);
+    console.log('Modal elements:', {
+      modal: document.getElementById('dataEntryModal'),
+      form: document.getElementById('dataEntryForm'),
+      deleteBtn: document.getElementById('deleteDataBtn'),
+      confirmModal: document.getElementById('deleteConfirmModal')
+    });
+    console.log('Edit buttons count:', document.querySelectorAll('.btn-edit').length);
+    console.log('Delete buttons count:', document.querySelectorAll('.btn-delete').length);
+  };
+</script>
+{% endblock %}
