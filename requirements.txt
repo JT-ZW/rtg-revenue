@@ -1,5 +1,5 @@
 # ========================================
-# Hotel Performance Dashboard - Fixed for Python 3.11
+# Hotel Performance Dashboard - Emergency Fix for Render
 # ========================================
 
 # Core Flask Framework
@@ -13,45 +13,33 @@ click==8.1.7
 # Production WSGI Server
 gunicorn==21.2.0
 
-# Database & Supabase (Updated versions)
-supabase==2.7.4
-postgrest==0.16.8
-gotrue==2.7.0
-storage3==0.7.7
+# Database & Supabase (Stable versions)
+supabase==1.0.4
+postgrest==0.10.2
+gotrue==1.0.1
+storage3==0.5.4
 
-# Data Processing & Analytics (Compatible versions)
-pandas==2.2.2
-numpy==1.26.4
-scipy==1.13.1
+# Data Processing - Use older, stable versions with guaranteed wheels
+pandas==1.5.3
+numpy==1.24.3
+scipy==1.10.1
 
-# Time Series Forecasting (Simplified - Prophet can be problematic)
-# prophet==1.1.5
-# cmdstanpy==1.2.0
-# holidays==0.45
-
-# Alternative: Use statsmodels for simpler forecasting
-statsmodels==0.14.2
+# Use simple statistics instead of statsmodels if still having issues
+# statsmodels==0.13.5
 
 # HTTP Requests & API Integration
-requests==2.31.0
-urllib3==2.2.2
+requests==2.28.2
 
 # Date/Time & Environment
-python-dateutil==2.9.0
-python-dotenv==1.0.1
+python-dateutil==2.8.2
+python-dotenv==1.0.0
 
 # Security & Validation
-cryptography==42.0.8
-PyJWT==2.8.0
+cryptography==39.0.1
+PyJWT==2.6.0
 
 # CORS Support
-Flask-CORS==4.0.1
-
-# Performance & Caching (Simplified)
-Flask-Caching==2.3.0
-
-# Rate Limiting
-Flask-Limiter==3.8.0
+Flask-CORS==3.0.10
 
 # Essential utilities
-pytz==2024.1
+pytz==2022.7.1
