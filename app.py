@@ -6,12 +6,157 @@ from functools import wraps
 import traceback
 import time
 import statistics
+import math
 
-# Import custom modules
+# Import custom modules with error handling
 from config import Config
 from utils.supabase_client import SupabaseClient
-from utils.forecasting import HotelForecaster
-from utils.ai_analysis import AIAnalyzer
+
+# ========================================
+# SAFE IMPORTS FOR DEPLOYMENT
+# ========================================
+
+# Try to import forecasting module, fall back to dummy if not available
+try:
+    from utils.forecasting import HotelForecaster
+    FORECASTING_AVAILABLE = True
+    print("✅ Forecasting module loaded successfully")
+except ImportError as e:
+    print(f"⚠️  Forecasting module not available: {e}")
+    FORECASTING_AVAILABLE = False
+    
+    # Create dummy forecaster class
+    class HotelForecaster:
+        def __init__(self):
+            pass
+        
+        def generate_forecast(self, historical_data, metric, periods):
+            return self._simple_forecast(historical_data, metric, periods)
+        
+        def generate_simple_forecast(self, historical_data, metric, periods):
+            return self._simple_forecast(historical_data, metric, periods)
+        
+        def generate_basic_trend_forecast(self, historical_data, metric, periods):
+            return self._simple_forecast(historical_data, metric, periods)
+        
+        def _simple_forecast(self, historical_data, metric, periods):
+            """Simple fallback forecast when Prophet is not available"""
+            if not historical_data or len(historical_data) < 2:
+                return []
+            
+            # Get recent values
+            if metric == 'revenue':
+                recent_values = [float(item.get('actual_revenue', 0)) for item in historical_data[-3:]]
+            else:
+                recent_values = [float(item.get('actual_room_rate', 0)) for item in historical_data[-3:]]
+            
+            # Calculate simple trend
+            if len(recent_values) >= 2:
+                trend = (recent_values[-1] - recent_values[0]) / (len(recent_values) - 1)
+            else:
+                trend = 0
+            
+            # Generate forecast
+            forecast = []
+            last_value = recent_values[-1] if recent_values else 0
+            
+            for i in range(min(periods, 7)):  # Limit to 7 days for simple forecast
+                predicted_value = last_value + (trend * (i + 1))
+                forecast.append({
+                    'date': (datetime.now().date() + timedelta(days=i+1)).isoformat(),
+                    'predicted_value': round(max(0, predicted_value), 2),
+                    'confidence_interval': [
+                        round(max(0, predicted_value * 0.9), 2),
+                        round(predicted_value * 1.1, 2)
+                    ]
+                })
+            
+            return forecast
+
+# Try to import AI analysis module, fall back to dummy if not available
+try:
+    from utils.ai_analysis import AIAnalyzer
+    AI_ANALYSIS_AVAILABLE = True
+    print("✅ AI Analysis module loaded successfully")
+except ImportError as e:
+    print(f"⚠️  AI Analysis module not available: {e}")
+    AI_ANALYSIS_AVAILABLE = False
+    
+    # Create dummy AI analyzer class
+    class AIAnalyzer:
+        def __init__(self):
+            pass
+        
+        def generate_insights(self, historical_data, forecast_data=None, metric='revenue', data_context=None):
+            """Generate simple insights when AI analysis is not available"""
+            if not historical_data:
+                return "No historical data available for analysis."
+            
+            data_points = len(historical_data)
+            if data_points < 3:
+                return f"Limited data available ({data_points} days). Add more performance data to get detailed AI insights."
+            
+            # Generate basic insights based on data
+            if metric == 'revenue':
+                recent_revenues = [float(item.get('actual_revenue', 0)) for item in historical_data[-7:]]
+                avg_revenue = sum(recent_revenues) / len(recent_revenues) if recent_revenues else 0
+                
+                insight = f"Based on {data_points} days of data, your average daily revenue is ${avg_revenue:,.2f}. "
+                
+                if len(recent_revenues) >= 3:
+                    trend = recent_revenues[-1] - recent_revenues[0]
+                    if trend > 0:
+                        insight += "Revenue shows a positive trend over recent days."
+                    elif trend < 0:
+                        insight += "Revenue shows a declining trend - consider reviewing operations."
+                    else:
+                        insight += "Revenue remains stable."
+                
+                return insight
+            else:
+                recent_rates = [float(item.get('actual_room_rate', 0)) for item in historical_data[-7:]]
+                avg_rate = sum(recent_rates) / len(recent_rates) if recent_rates else 0
+                
+                return f"Based on {data_points} days of data, your average room rate is ${avg_rate:.2f}. Add more data for detailed AI insights."
+        
+        def get_service_status(self):
+            return {
+                'status': 'limited',
+                'message': 'Basic insights available. Full AI analysis disabled.',
+                'features': ['basic_trends', 'simple_statistics']
+            }
+
+# ========================================
+# SAFE STATISTICS FUNCTIONS
+# ========================================
+
+def safe_stdev(data):
+    """Calculate standard deviation safely with fallback"""
+    try:
+        if not data or len(data) < 2:
+            return 0.0
+        return statistics.stdev(data)
+    except Exception:
+        # Fallback manual calculation
+        if not data or len(data) < 2:
+            return 0.0
+        try:
+            mean = sum(data) / len(data)
+            variance = sum((x - mean) ** 2 for x in data) / (len(data) - 1)
+            return math.sqrt(variance)
+        except Exception:
+            return 0.0
+
+def safe_mean(data):
+    """Calculate mean safely"""
+    try:
+        if not data:
+            return 0.0
+        return statistics.mean(data)
+    except Exception:
+        if not data:
+            return 0.0
+        return sum(data) / len(data)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -67,15 +212,33 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize services
+# ========================================
+# SAFE SERVICE INITIALIZATION
+# ========================================
+
+# Initialize services with error handling
 try:
     supabase_client = SupabaseClient()
-    forecaster = HotelForecaster()
-    ai_analyzer = AIAnalyzer()
-    logger.info("All services initialized successfully")
+    logger.info("✅ Supabase client initialized successfully")
 except Exception as e:
-    logger.error(f"Failed to initialize services: {str(e)}")
+    logger.error(f"❌ Failed to initialize Supabase client: {str(e)}")
     raise
+
+try:
+    forecaster = HotelForecaster()
+    logger.info(f"✅ Forecaster initialized (Available: {FORECASTING_AVAILABLE})")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize forecaster: {str(e)}")
+    forecaster = HotelForecaster()  # Use dummy class
+
+try:
+    ai_analyzer = AIAnalyzer()
+    logger.info(f"✅ AI Analyzer initialized (Available: {AI_ANALYSIS_AVAILABLE})")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize AI analyzer: {str(e)}")
+    ai_analyzer = AIAnalyzer()  # Use dummy class
+
+logger.info("🚀 All services initialized successfully")
 
 # ========================================
 # ENHANCED SESSION VALIDATION FUNCTIONS
@@ -386,9 +549,9 @@ def calculate_enhanced_metrics_robust(performance_data):
         total_room_rate_variance = sum(room_rate_variances)
         total_revenue_variance = sum(revenue_variances)
         
-        # Calculate averages
-        avg_actual_room_rate = sum(actual_room_rates) / data_count if data_count > 0 else 0
-        avg_target_room_rate = sum(target_room_rates) / data_count if data_count > 0 else 0
+        # Calculate averages using safe functions
+        avg_actual_room_rate = safe_mean(actual_room_rates)
+        avg_target_room_rate = safe_mean(target_room_rates)
         avg_room_rate_variance = total_room_rate_variance / data_count if data_count > 0 else 0
         avg_revenue_variance = total_revenue_variance / data_count if data_count > 0 else 0
         
@@ -484,14 +647,14 @@ def calculate_advanced_analytics_robust(performance_data):
         
         if len(performance_data) >= 14:
             try:
-                recent_revenue = sum(revenue_values[-7:]) / 7
-                previous_revenue = sum(revenue_values[-14:-7]) / 7
+                recent_revenue = safe_mean(revenue_values[-7:])
+                previous_revenue = safe_mean(revenue_values[-14:-7])
                 revenue_change = 0
                 if previous_revenue > 0:
                     revenue_change = ((recent_revenue - previous_revenue) / previous_revenue) * 100
                 
-                recent_rate = sum(room_rate_values[-7:]) / 7
-                previous_rate = sum(room_rate_values[-14:-7]) / 7
+                recent_rate = safe_mean(room_rate_values[-7:])
+                previous_rate = safe_mean(room_rate_values[-14:-7])
                 rate_change = 0
                 if previous_rate > 0:
                     rate_change = ((recent_rate - previous_rate) / previous_rate) * 100
@@ -503,13 +666,13 @@ def calculate_advanced_analytics_robust(performance_data):
             except Exception as trend_error:
                 logger.warning(f"Error calculating trends: {trend_error}")
         
-        # Volatility metrics (standard deviation)
+        # Volatility metrics (standard deviation) - FIXED: Using safe_stdev
         revenue_volatility = 0
         rate_volatility = 0
         try:
             if len(revenue_variances) > 1:
-                revenue_volatility = round(statistics.stdev(revenue_variances), 2)
-                rate_volatility = round(statistics.stdev(room_rate_variances), 2)
+                revenue_volatility = round(safe_stdev(revenue_variances), 2)
+                rate_volatility = round(safe_stdev(room_rate_variances), 2)
         except Exception as volatility_error:
             logger.warning(f"Error calculating volatility: {volatility_error}")
         
@@ -530,8 +693,8 @@ def calculate_advanced_analytics_robust(performance_data):
         ma_7_revenue = 0
         ma_7_rate = 0
         if len(revenue_values) >= 7:
-            ma_7_revenue = sum(revenue_values[-7:]) / 7
-            ma_7_rate = sum(room_rate_values[-7:]) / 7
+            ma_7_revenue = safe_mean(revenue_values[-7:])
+            ma_7_rate = safe_mean(room_rate_values[-7:])
         
         # Format dates safely
         def safe_format_date(date_value):
@@ -550,12 +713,12 @@ def calculate_advanced_analytics_robust(performance_data):
         best_date = safe_format_date(best_revenue_day.get('date', 'N/A'))
         worst_date = safe_format_date(worst_revenue_day.get('date', 'N/A'))
         
-        # Calculate additional statistics
-        avg_revenue = sum(revenue_values) / len(revenue_values) if revenue_values else 0
+        # Calculate additional statistics using safe functions
+        avg_revenue = safe_mean(revenue_values)
         max_revenue = max(revenue_values) if revenue_values else 0
         min_revenue = min(revenue_values) if revenue_values else 0
         
-        avg_room_rate = sum(room_rate_values) / len(room_rate_values) if room_rate_values else 0
+        avg_room_rate = safe_mean(room_rate_values)
         max_room_rate = max(room_rate_values) if room_rate_values else 0
         min_room_rate = min(room_rate_values) if room_rate_values else 0
         
@@ -617,8 +780,8 @@ def generate_performance_insights_robust(performance_data):
                 revenue_variances.append(0.0)
                 rate_variances.append(0.0)
         
-        # Revenue analysis
-        avg_revenue_variance = sum(revenue_variances) / len(revenue_variances) if revenue_variances else 0
+        # Revenue analysis using safe functions
+        avg_revenue_variance = safe_mean(revenue_variances)
         
         if avg_revenue_variance > 10:
             insights.append({
@@ -639,8 +802,8 @@ def generate_performance_insights_robust(performance_data):
                 'message': f'Revenue variance is within acceptable range at {avg_revenue_variance:.1f}%. Maintaining steady performance.'
             })
         
-        # Rate analysis
-        avg_rate_variance = sum(rate_variances) / len(rate_variances) if rate_variances else 0
+        # Rate analysis using safe functions
+        avg_rate_variance = safe_mean(rate_variances)
         
         if avg_rate_variance > 5:
             insights.append({
@@ -661,8 +824,8 @@ def generate_performance_insights_robust(performance_data):
                 recent_revenues = [float(item.get('actual_revenue', 0)) for item in performance_data[-7:]]
                 earlier_revenues = [float(item.get('actual_revenue', 0)) for item in performance_data[:7]]
                 
-                recent_avg = sum(recent_revenues) / len(recent_revenues) if recent_revenues else 0
-                earlier_avg = sum(earlier_revenues) / len(earlier_revenues) if earlier_revenues else 0
+                recent_avg = safe_mean(recent_revenues)
+                earlier_avg = safe_mean(earlier_revenues)
                 
                 if recent_avg > earlier_avg * 1.05 and earlier_avg > 0:
                     change_pct = ((recent_avg - earlier_avg) / earlier_avg) * 100
@@ -1145,12 +1308,6 @@ def submit_data():
             }), 409  # HTTP 409 Conflict
         
         # DO NOT calculate variances - let the database handle them as generated columns
-        # The database will automatically calculate:
-        # - room_rate_variance = actual_room_rate - target_room_rate
-        # - revenue_variance = actual_revenue - target_revenue  
-        # - room_rate_variance_pct = (room_rate_variance / target_room_rate) * 100
-        # - revenue_variance_pct = (revenue_variance / target_revenue) * 100
-        
         logger.debug("Variance calculations will be handled by database generated columns")
         
         # Layer 2: Database insertion with enhanced error handling
@@ -1189,26 +1346,6 @@ def submit_data():
             # Layer 3: Enhanced database-level duplicate constraint handling
             if any(keyword in error_msg for keyword in ['duplicate', 'unique', 'conflict', 'already exists']):
                 logger.warning(f"Database duplicate constraint triggered for submission {submission_id}")
-                
-                # Double-check if data was actually inserted despite the error
-                try:
-                    verification_data = supabase_client.get_performance_data_by_date(
-                        user_id=user_id,
-                        date_param=entry_date  # ✅ FIXED: Using correct parameter name
-                    )
-                    
-                    if verification_data:
-                        logger.info(f"Data exists after 'duplicate' error - race condition detected in submission {submission_id}")
-                        return jsonify({
-                            'success': False,
-                            'error': f'Data for {entry_date.strftime("%Y-%m-%d")} was already submitted.',
-                            'error_type': 'RACE_CONDITION_DUPLICATE',
-                            'suggestion': 'Another submission for this date was processed simultaneously. The page will refresh to show current data.',
-                            'should_refresh': True
-                        }), 409
-                        
-                except Exception as verification_error:
-                    logger.error(f"Verification check failed: {str(verification_error)}")
                 
                 return jsonify({
                     'success': False,
@@ -1280,13 +1417,6 @@ def update_data():
                 'error': f'No data found for {performance_data["date"].strftime("%Y-%m-%d")} to update.',
                 'suggestion': 'Create a new entry instead.'
             }), 404
-        
-        # DO NOT calculate variances - let the database handle them as generated columns
-        # The database will automatically calculate:
-        # - room_rate_variance = actual_room_rate - target_room_rate
-        # - revenue_variance = actual_revenue - target_revenue  
-        # - room_rate_variance_pct = (room_rate_variance / target_room_rate) * 100
-        # - revenue_variance_pct = (revenue_variance / target_revenue) * 100
         
         logger.debug("Variance calculations will be handled by database generated columns")
         
@@ -1418,7 +1548,7 @@ def reports():
                                             pass
                                 elif hasattr(item_date, 'date'):
                                     dates.append(item_date.date())
-                                elif isinstance(item_date, datetime.date):
+                                elif isinstance(item_date, date):
                                     dates.append(item_date)
                         except Exception as date_error:
                             logger.warning(f"Error processing date: {str(date_error)}")
@@ -1489,11 +1619,6 @@ def reports():
         logger.info(f"  - Advanced metrics: {len(advanced_metrics)} metrics")
         logger.info(f"  - Insights: {len(performance_insights)} insights")
         
-        # ENHANCED: Add debug information for development
-        if app.debug:
-            logger.debug(f"Sample performance data: {performance_data[:1] if performance_data else 'None'}")
-            logger.debug(f"Summary stats keys: {list(summary_stats.keys()) if summary_stats else 'None'}")
-        
         return render_template('reports.html',
                              performance_data=performance_data,
                              summary_stats=summary_stats,
@@ -1521,13 +1646,21 @@ def reports():
                              end_date=safe_end_date)
 
 # ========================================
-# FORECASTING AND AI ANALYSIS ROUTES
+# FORECASTING AND AI ANALYSIS ROUTES - WITH FALLBACK HANDLING
 # ========================================
 
 @app.route('/forecast')
 @login_required
 def get_forecast():
-    """Generate forecast data using Prophet - IMPROVED to handle minimal data"""
+    """Generate forecast data - WITH FALLBACK for missing forecasting module"""
+    if not FORECASTING_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Forecasting service temporarily unavailable',
+            'message': 'Advanced forecasting features are temporarily disabled due to missing dependencies.',
+            'suggestion': 'Basic functionality is available. Full forecasting will be restored in future updates.'
+        }), 503
+    
     try:
         days = request.args.get('days', 7, type=int)
         metric = request.args.get('metric', 'revenue')  # 'revenue' or 'room_rate'
@@ -1558,42 +1691,27 @@ def get_forecast():
                 'suggestion': 'Add more daily performance entries to enable forecasting.'
             }), 400
         
-        # For minimal data (2-6 days), use simpler forecasting
-        if len(historical_data) < 7:
-            logger.info(f"Using simplified forecasting with {len(historical_data)} days of data")
-            
-            # Generate simple trend-based forecast for minimal data
-            try:
-                forecast_data = forecaster.generate_simple_forecast(
-                    historical_data=historical_data,
-                    metric=metric,
-                    periods=min(days, 7)  # Limit forecast days for minimal data
-                )
-            except Exception as e:
-                logger.error(f"Simple forecasting failed: {str(e)}")
-                # Fallback to basic trend forecast
-                forecast_data = forecaster.generate_basic_trend_forecast(
-                    historical_data=historical_data,
-                    metric=metric,
-                    periods=min(days, 3)
-                )
-        else:
-            # Use full Prophet forecasting for sufficient data
-            forecast_data = forecaster.generate_forecast(
-                historical_data=historical_data,
-                metric=metric,
-                periods=days
-            )
-        
-        # Save forecast to database for tracking
-        forecast_id = supabase_client.save_forecast(
-            user_id=session['user_id'],
+        # Use the dummy/simple forecasting
+        forecast_data = forecaster.generate_forecast(
+            historical_data=historical_data,
             metric=metric,
-            forecast_data=forecast_data,
-            periods=len(forecast_data)  # Use actual forecast length
+            periods=days
         )
         
-        logger.info(f"Forecast generated successfully for {metric} - {len(forecast_data)} periods")
+        # Try to save forecast to database (may not be implemented in simple version)
+        forecast_id = None
+        try:
+            forecast_id = supabase_client.save_forecast(
+                user_id=session['user_id'],
+                metric=metric,
+                forecast_data=forecast_data,
+                periods=len(forecast_data)
+            )
+        except Exception as save_error:
+            logger.warning(f"Could not save forecast: {save_error}")
+            forecast_id = 'simple_forecast'
+        
+        logger.info(f"Simple forecast generated successfully for {metric} - {len(forecast_data)} periods")
         
         return jsonify({
             'success': True,
@@ -1601,8 +1719,9 @@ def get_forecast():
             'metric': metric,
             'periods': len(forecast_data),
             'data_points_used': len(historical_data),
-            'forecast_type': 'simple' if len(historical_data) < 7 else 'advanced',
-            'forecast': forecast_data
+            'forecast_type': 'simple_trend',
+            'forecast': forecast_data,
+            'note': 'Using simplified forecasting. Full Prophet-based forecasting temporarily unavailable.'
         })
         
     except Exception as e:
@@ -1616,7 +1735,15 @@ def get_forecast():
 @app.route('/analyze')
 @login_required
 def get_ai_analysis():
-    """Generate AI analysis using LLaMA API - IMPROVED for minimal data"""
+    """Generate AI analysis - WITH FALLBACK for missing AI module"""
+    if not AI_ANALYSIS_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'AI analysis service temporarily unavailable',
+            'message': 'Advanced AI insights are temporarily disabled due to missing dependencies.',
+            'suggestion': 'Basic statistics and insights are still available in the reports section.'
+        }), 503
+    
     try:
         metric = request.args.get('metric', 'revenue')
         period = request.args.get('period', 7, type=int)
@@ -1635,7 +1762,7 @@ def get_ai_analysis():
                 'suggestion': 'Add some performance data first to get AI insights.'
             }), 400
         
-        # Get forecast data if available
+        # Get forecast data if available (may be None)
         forecast_data = None
         try:
             forecast_data = supabase_client.get_latest_forecast(
@@ -1645,7 +1772,7 @@ def get_ai_analysis():
         except Exception as forecast_error:
             logger.warning(f"Could not get forecast data for analysis: {str(forecast_error)}")
         
-        # Generate AI insights with context about data amount
+        # Generate AI insights using dummy analyzer
         analysis = ai_analyzer.generate_insights(
             historical_data=historical_data,
             forecast_data=forecast_data,
@@ -1657,7 +1784,7 @@ def get_ai_analysis():
             }
         )
         
-        logger.info(f"AI analysis generated successfully for {metric} with {len(historical_data)} data points")
+        logger.info(f"Basic AI analysis generated successfully for {metric} with {len(historical_data)} data points")
         
         return jsonify({
             'success': True,
@@ -1665,7 +1792,9 @@ def get_ai_analysis():
             'analysis': analysis,
             'data_points_analyzed': len(historical_data),
             'has_forecast_data': forecast_data is not None,
-            'generated_at': datetime.now().isoformat()
+            'generated_at': datetime.now().isoformat(),
+            'analysis_type': 'basic',
+            'note': 'Using simplified analysis. Full AI insights temporarily unavailable.'
         })
         
     except Exception as e:
@@ -1868,586 +1997,6 @@ def get_data_api():
         }), 500
 
 # ========================================
-# DEBUG ROUTES FOR TROUBLESHOOTING PERFORMANCE SCORE CONSISTENCY
-# ========================================
-
-@app.route('/debug-performance-score')
-@login_required
-def debug_performance_score():
-    """Debug endpoint to check performance score calculation consistency"""
-    try:
-        user_id = session['user_id']
-        
-        debug_info = {
-            'user_id': user_id,
-            'timestamp': datetime.now().isoformat(),
-            'calculations': []
-        }
-        
-        # Test 1: Get data that dashboard would use (last 30 days)
-        try:
-            dashboard_raw_data = supabase_client.get_performance_data_range(
-                user_id=user_id,
-                start_date=datetime.now().date() - timedelta(days=30),
-                end_date=datetime.now().date()
-            )
-            
-            dashboard_normalized = normalize_performance_data(dashboard_raw_data) if dashboard_raw_data else []
-            dashboard_stats = calculate_enhanced_metrics_robust(dashboard_normalized) if dashboard_normalized else get_default_summary_stats()
-            
-            debug_info['calculations'].append({
-                'method': 'Dashboard Method (Last 30 Days)',
-                'raw_data_count': len(dashboard_raw_data) if dashboard_raw_data else 0,
-                'normalized_count': len(dashboard_normalized),
-                'performance_score': dashboard_stats.get('performance_score', 'N/A'),
-                'revenue_achievement_rate': dashboard_stats.get('revenue_achievement_rate', 'N/A'),
-                'room_rate_achievement_rate': dashboard_stats.get('room_rate_achievement_rate', 'N/A'),
-                'days_analyzed': dashboard_stats.get('days_analyzed', 'N/A')
-            })
-            
-        except Exception as e:
-            debug_info['calculations'].append({
-                'method': 'Dashboard Method (Last 30 Days)',
-                'error': str(e)
-            })
-        
-        # Test 2: Get data that reports would use (all available data)
-        try:
-            reports_raw_data = supabase_client.get_performance_data_range(
-                user_id=user_id,
-                start_date=None,
-                end_date=None
-            )
-            
-            reports_normalized = normalize_performance_data(reports_raw_data) if reports_raw_data else []
-            reports_stats = calculate_enhanced_metrics_robust(reports_normalized) if reports_normalized else get_default_summary_stats()
-            
-            debug_info['calculations'].append({
-                'method': 'Reports Method (All Data)',
-                'raw_data_count': len(reports_raw_data) if reports_raw_data else 0,
-                'normalized_count': len(reports_normalized),
-                'performance_score': reports_stats.get('performance_score', 'N/A'),
-                'revenue_achievement_rate': reports_stats.get('revenue_achievement_rate', 'N/A'),
-                'room_rate_achievement_rate': reports_stats.get('room_rate_achievement_rate', 'N/A'),
-                'days_analyzed': reports_stats.get('days_analyzed', 'N/A')
-            })
-            
-        except Exception as e:
-            debug_info['calculations'].append({
-                'method': 'Reports Method (All Data)',
-                'error': str(e)
-            })
-        
-        # Test 3: Try old supabase method for comparison
-        try:
-            old_stats = supabase_client.get_performance_stats()
-            debug_info['calculations'].append({
-                'method': 'Old Supabase Method',
-                'performance_score': old_stats.get('performance_score', 'N/A'),
-                'total_records': old_stats.get('total_records', 'N/A'),
-                'full_stats': old_stats
-            })
-        except Exception as e:
-            debug_info['calculations'].append({
-                'method': 'Old Supabase Method',
-                'error': str(e)
-            })
-        
-        # Test 4: Sample calculation details
-        if dashboard_normalized:
-            sample_data = dashboard_normalized[:3]  # First 3 records
-            debug_info['sample_data'] = []
-            
-            for i, item in enumerate(sample_data):
-                debug_info['sample_data'].append({
-                    'index': i,
-                    'date': item.get('date', 'N/A'),
-                    'target_room_rate': item.get('target_room_rate', 0),
-                    'actual_room_rate': item.get('actual_room_rate', 0),
-                    'target_revenue': item.get('target_revenue', 0),
-                    'actual_revenue': item.get('actual_revenue', 0),
-                    'room_rate_variance': item.get('room_rate_variance', 0),
-                    'revenue_variance': item.get('revenue_variance', 0),
-                    'room_rate_variance_pct': item.get('room_rate_variance_pct', 0),
-                    'revenue_variance_pct': item.get('revenue_variance_pct', 0)
-                })
-        
-        # Analysis
-        scores = [calc.get('performance_score') for calc in debug_info['calculations'] if 'performance_score' in calc and calc['performance_score'] != 'N/A']
-        if len(scores) > 1:
-            debug_info['analysis'] = {
-                'scores_found': scores,
-                'are_consistent': len(set(scores)) <= 1,
-                'max_difference': max(scores) - min(scores) if scores else 0,
-                'recommendation': 'Scores are consistent' if len(set(scores)) <= 1 else f'Scores differ by {max(scores) - min(scores):.1f} points'
-            }
-        
-        return jsonify({
-            'success': True,
-            'debug_info': debug_info
-        })
-        
-    except Exception as e:
-        logger.error(f"Error in debug_performance_score: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 500
-
-@app.route('/validate-performance-consistency')
-@login_required
-def validate_performance_consistency():
-    """Quick validation endpoint to check performance score consistency"""
-    try:
-        user_id = session['user_id']
-        
-        # Get dashboard-style stats (last 30 days)
-        dashboard_stats = get_consistent_performance_stats(user_id, days_back=30)
-        
-        # Get reports-style stats (all data)
-        reports_stats = get_consistent_performance_stats(user_id, days_back=None)
-        
-        dashboard_score = dashboard_stats.get('performance_score', 0)
-        reports_score = reports_stats.get('performance_score', 0)
-        
-        is_consistent = abs(dashboard_score - reports_score) < 0.1  # Allow tiny rounding differences
-        
-        result = {
-            'success': True,
-            'dashboard_score': dashboard_score,
-            'reports_score': reports_score,
-            'is_consistent': is_consistent,
-            'difference': abs(dashboard_score - reports_score),
-            'dashboard_data_points': dashboard_stats.get('data_points_used', 0),
-            'reports_data_points': reports_stats.get('data_points_used', 0),
-            'message': 'Scores are consistent' if is_consistent else f'Scores differ by {abs(dashboard_score - reports_score):.2f} points'
-        }
-        
-        return jsonify(result)
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/debug-reports-data')
-@login_required
-def debug_reports_data():
-    """Debug endpoint to check what data is available for reports"""
-    try:
-        user_id = session['user_id']
-        
-        debug_info = {
-            'user_id': user_id,
-            'timestamp': datetime.now().isoformat(),
-            'tests': []
-        }
-        
-        # Test 1: Database connection
-        try:
-            connection_ok = supabase_client.test_connection()
-            debug_info['tests'].append({
-                'test': 'Database Connection',
-                'status': 'PASS' if connection_ok else 'FAIL',
-                'message': 'Connection successful' if connection_ok else 'Connection failed'
-            })
-        except Exception as e:
-            debug_info['tests'].append({
-                'test': 'Database Connection',
-                'status': 'FAIL',
-                'message': str(e)
-            })
-        
-        # Test 2: Check if ANY data exists for this user
-        try:
-            response = supabase_client.client.table('performance_data') \
-                .select('*') \
-                .eq('user_id', user_id) \
-                .limit(10) \
-                .execute()
-            
-            total_records = len(response.data) if response.data else 0
-            
-            debug_info['tests'].append({
-                'test': 'Raw Data Check',
-                'status': 'PASS',
-                'message': f'Found {total_records} total records for user',
-                'total_records': total_records,
-                'sample_data': response.data[:3] if response.data else []
-            })
-            
-            if response.data:
-                # Analyze the data structure
-                first_record = response.data[0]
-                debug_info['data_structure'] = {
-                    'record_type': str(type(first_record)),
-                    'fields': list(first_record.keys()) if isinstance(first_record, dict) else 'Not a dict',
-                    'sample_values': {
-                        'date': first_record.get('date'),
-                        'actual_revenue': first_record.get('actual_revenue'),
-                        'target_revenue': first_record.get('target_revenue'),
-                        'actual_room_rate': first_record.get('actual_room_rate'),
-                        'target_room_rate': first_record.get('target_room_rate')
-                    } if isinstance(first_record, dict) else 'Cannot extract values'
-                }
-                
-                # Check date range
-                dates = []
-                for record in response.data:
-                    if isinstance(record, dict) and record.get('date'):
-                        try:
-                            if isinstance(record['date'], str):
-                                date_obj = datetime.fromisoformat(record['date'].replace('Z', '+00:00')).date()
-                            else:
-                                date_obj = record['date']
-                            dates.append(date_obj)
-                        except Exception:
-                            continue
-                
-                if dates:
-                    debug_info['date_range'] = {
-                        'start': min(dates).isoformat(),
-                        'end': max(dates).isoformat(),
-                        'total_days': (max(dates) - min(dates)).days + 1,
-                        'dates_parsed': len(dates)
-                    }
-            
-        except Exception as e:
-            debug_info['tests'].append({
-                'test': 'Raw Data Check',
-                'status': 'FAIL',
-                'message': str(e),
-                'traceback': traceback.format_exc()
-            })
-        
-        # Test 3: Try the get_performance_data_range method
-        try:
-            range_data = supabase_client.get_performance_data_range(
-                user_id=user_id,
-                start_date=None,
-                end_date=None
-            )
-            
-            debug_info['tests'].append({
-                'test': 'Performance Data Range Method',
-                'status': 'PASS',
-                'message': f'Method returned {len(range_data) if range_data else 0} records',
-                'method_result_count': len(range_data) if range_data else 0
-            })
-            
-        except Exception as e:
-            debug_info['tests'].append({
-                'test': 'Performance Data Range Method',
-                'status': 'FAIL',
-                'message': str(e),
-                'traceback': traceback.format_exc()
-            })
-        
-        # Test 4: Try data normalization
-        try:
-            if 'range_data' in locals() and range_data:
-                normalized = normalize_performance_data(range_data)
-                debug_info['tests'].append({
-                    'test': 'Data Normalization',
-                    'status': 'PASS',
-                    'message': f'Normalized {len(normalized)} records successfully',
-                    'normalized_count': len(normalized),
-                    'sample_normalized': normalized[0] if normalized else None
-                })
-            else:
-                debug_info['tests'].append({
-                    'test': 'Data Normalization',
-                    'status': 'SKIP',
-                    'message': 'No data available to normalize'
-                })
-                
-        except Exception as e:
-            debug_info['tests'].append({
-                'test': 'Data Normalization',
-                'status': 'FAIL',
-                'message': str(e),
-                'traceback': traceback.format_exc()
-            })
-        
-        # Test 5: Environment check
-        debug_info['environment'] = {
-            'supabase_url_set': bool(os.getenv('SUPABASE_URL')),
-            'supabase_key_set': bool(os.getenv('SUPABASE_KEY')),
-            'user_in_session': 'user_id' in session,
-            'session_user_id': session.get('user_id'),
-            'flask_env': os.getenv('FLASK_ENV', 'not_set')
-        }
-        
-        return jsonify({
-            'success': True,
-            'debug_info': debug_info
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 500
-
-@app.route('/debug-create-sample-data')
-@login_required
-def debug_create_sample_data():
-    """Create sample data for testing (DEVELOPMENT ONLY)"""
-    try:
-        user_id = session['user_id']
-        
-        # Check if data already exists
-        existing_data = supabase_client.get_performance_data_range(
-            user_id=user_id,
-            start_date=None,
-            end_date=None
-        )
-        
-        if existing_data and len(existing_data) > 0:
-            return jsonify({
-                'success': False,
-                'message': f'User already has {len(existing_data)} records. Skipping sample data creation.',
-                'existing_count': len(existing_data)
-            })
-        
-        # Create sample data for the last 7 days
-        sample_records = []
-        for i in range(7):
-            date_offset = datetime.now().date() - timedelta(days=i)
-            
-            # Generate realistic sample data
-            base_rate = 150 + (i * 5)  # Varying room rates
-            base_revenue = 3000 + (i * 100)  # Varying revenue
-            
-            # Add some variance
-            actual_rate = base_rate + ((-1) ** i) * (5 + (i * 2))
-            actual_revenue = base_revenue + ((-1) ** i) * (200 + (i * 50))
-            
-            sample_data = {
-                'user_id': user_id,
-                'date': date_offset,
-                'target_room_rate': base_rate,
-                'actual_room_rate': actual_rate,
-                'target_revenue': base_revenue,
-                'actual_revenue': actual_revenue,
-                'room_rate_variance': actual_rate - base_rate,
-                'revenue_variance': actual_revenue - base_revenue,
-                'room_rate_variance_pct': ((actual_rate - base_rate) / base_rate) * 100,
-                'revenue_variance_pct': ((actual_revenue - base_revenue) / base_revenue) * 100
-            }
-            
-            try:
-                result = supabase_client.insert_performance_data(sample_data)
-                if result:
-                    sample_records.append({
-                        'date': date_offset.isoformat(),
-                        'status': 'inserted'
-                    })
-                else:
-                    sample_records.append({
-                        'date': date_offset.isoformat(),
-                        'status': 'failed'
-                    })
-            except Exception as insert_error:
-                sample_records.append({
-                    'date': date_offset.isoformat(),
-                    'status': 'error',
-                    'error': str(insert_error)
-                })
-        
-        return jsonify({
-            'success': True,
-            'message': f'Sample data creation attempted for {len(sample_records)} records',
-            'records': sample_records,
-            'user_id': user_id
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 500
-        
-@app.route('/debug-dates')
-@login_required
-def debug_dates():
-    """Debug endpoint to check date processing"""
-    try:
-        user_id = session['user_id']
-        
-        # Get raw data from database
-        raw_data = supabase_client.get_performance_data_range(
-            user_id=user_id,
-            start_date=None,
-            end_date=None
-        )
-        
-        # Process it
-        normalized_data = normalize_performance_data(raw_data)
-        
-        debug_info = {
-            'raw_data_count': len(raw_data) if raw_data else 0,
-            'normalized_data_count': len(normalized_data) if normalized_data else 0,
-            'raw_samples': raw_data[:3] if raw_data else [],
-            'normalized_samples': normalized_data[:3] if normalized_data else []
-        }
-        
-        return jsonify({
-            'success': True,
-            'debug_info': debug_info
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/debug-reports-full-pipeline')
-@login_required
-def debug_reports_full_pipeline():
-    """Test the complete reports data pipeline"""
-    try:
-        user_id = session['user_id']
-        
-        pipeline_results = {
-            'user_id': user_id,
-            'timestamp': datetime.now().isoformat(),
-            'steps': []
-        }
-        
-        # Step 1: Raw data fetch
-        try:
-            raw_data = supabase_client.get_performance_data_range(
-                user_id=user_id,
-                start_date=None,
-                end_date=None
-            )
-            
-            pipeline_results['steps'].append({
-                'step': 'Raw Data Fetch',
-                'status': 'SUCCESS',
-                'count': len(raw_data) if raw_data else 0,
-                'sample': raw_data[0] if raw_data else None
-            })
-            
-            if not raw_data:
-                pipeline_results['steps'].append({
-                    'step': 'Pipeline End',
-                    'status': 'STOPPED',
-                    'reason': 'No raw data available'
-                })
-                return jsonify(pipeline_results)
-            
-            # Step 2: Data normalization
-            try:
-                normalized_data = normalize_performance_data(raw_data)
-                pipeline_results['steps'].append({
-                    'step': 'Data Normalization',
-                    'status': 'SUCCESS',
-                    'input_count': len(raw_data),
-                    'output_count': len(normalized_data),
-                    'sample_normalized': normalized_data[0] if normalized_data else None
-                })
-                
-                if not normalized_data:
-                    pipeline_results['steps'].append({
-                        'step': 'Pipeline End',
-                        'status': 'STOPPED',
-                        'reason': 'Data normalization produced no results'
-                    })
-                    return jsonify(pipeline_results)
-                
-                # Step 3: Summary statistics
-                try:
-                    summary_stats = calculate_enhanced_metrics_robust(normalized_data)
-                    pipeline_results['steps'].append({
-                        'step': 'Summary Statistics',
-                        'status': 'SUCCESS',
-                        'metrics_count': len(summary_stats),
-                        'sample_metrics': {
-                            'performance_score': summary_stats.get('performance_score'),
-                            'total_records': summary_stats.get('days_analyzed')
-                        }
-                    })
-                except Exception as e:
-                    pipeline_results['steps'].append({
-                        'step': 'Summary Statistics',
-                        'status': 'FAILED',
-                        'error': str(e)
-                    })
-                
-                # Step 4: Advanced metrics
-                try:
-                    advanced_metrics = calculate_advanced_analytics_robust(normalized_data)
-                    pipeline_results['steps'].append({
-                        'step': 'Advanced Analytics',
-                        'status': 'SUCCESS',
-                        'metrics_count': len(advanced_metrics),
-                        'sample_metrics': {
-                            'revenue_trend': advanced_metrics.get('revenue_trend'),
-                            'consistency_score': advanced_metrics.get('consistency_score')
-                        }
-                    })
-                except Exception as e:
-                    pipeline_results['steps'].append({
-                        'step': 'Advanced Analytics',
-                        'status': 'FAILED',
-                        'error': str(e)
-                    })
-                
-                # Step 5: Performance insights
-                try:
-                    insights = generate_performance_insights_robust(normalized_data)
-                    pipeline_results['steps'].append({
-                        'step': 'Performance Insights',
-                        'status': 'SUCCESS',
-                        'insights_count': len(insights),
-                        'sample_insight': insights[0] if insights else None
-                    })
-                except Exception as e:
-                    pipeline_results['steps'].append({
-                        'step': 'Performance Insights',
-                        'status': 'FAILED',
-                        'error': str(e)
-                    })
-                
-                pipeline_results['steps'].append({
-                    'step': 'Pipeline Complete',
-                    'status': 'SUCCESS',
-                    'message': 'All steps completed successfully'
-                })
-                
-            except Exception as e:
-                pipeline_results['steps'].append({
-                    'step': 'Data Normalization',
-                    'status': 'FAILED',
-                    'error': str(e),
-                    'traceback': traceback.format_exc()
-                })
-            
-        except Exception as e:
-            pipeline_results['steps'].append({
-                'step': 'Raw Data Fetch',
-                'status': 'FAILED',
-                'error': str(e),
-                'traceback': traceback.format_exc()
-            })
-        
-        return jsonify(pipeline_results)
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 500
-
-# ========================================
 # UTILITY AND HEALTH CHECK ROUTES
 # ========================================
 
@@ -2462,8 +2011,8 @@ def health_check():
             'timestamp': datetime.now().isoformat(),
             'services': {
                 'database': 'connected',
-                'forecasting': 'available',
-                'ai_analysis': 'available'
+                'forecasting': 'available' if FORECASTING_AVAILABLE else 'limited',
+                'ai_analysis': 'available' if AI_ANALYSIS_AVAILABLE else 'limited'
             }
         })
     except Exception as e:
@@ -2482,7 +2031,8 @@ def ai_status():
         return jsonify({
             'success': True,
             'status': status,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'available': AI_ANALYSIS_AVAILABLE
         })
     except Exception as e:
         logger.error(f"Error checking AI status: {str(e)}")
@@ -2508,7 +2058,7 @@ def check_duplicate():
         
         existing_data = supabase_client.get_performance_data_by_date(
             user_id=user_id,
-            date_param=check_date  # ✅ FIXED: Using correct parameter name
+            date_param=check_date
         )
         
         return jsonify({
@@ -2535,7 +2085,9 @@ if __name__ == '__main__':
     debug_mode = os.getenv('FLASK_ENV') == 'development'
     port = int(os.getenv('PORT', 5000))
     
-    logger.info(f"Starting Flask app on port {port} (debug={'ON' if debug_mode else 'OFF'})")
+    logger.info(f"🚀 Starting Flask app on port {port} (debug={'ON' if debug_mode else 'OFF'})")
+    logger.info(f"📊 Forecasting Available: {FORECASTING_AVAILABLE}")
+    logger.info(f"🤖 AI Analysis Available: {AI_ANALYSIS_AVAILABLE}")
     
     app.run(
         host='0.0.0.0',
